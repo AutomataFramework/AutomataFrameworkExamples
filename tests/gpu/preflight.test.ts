@@ -11,7 +11,10 @@ function setup(overrides: Partial<Preflight> = {}) {
   const reg: typeof fetchFn = async (url, init) => {
     const r = (b: unknown) => ({ status: 200, text: async () => JSON.stringify(b) })
     if (url.startsWith('https://ghcr.io/token')) return r({ token: 't' })
-    if (url.includes('/manifests/')) return r({ config: { digest: 'sha256:c' } })
+    // ghcr measured 2026-11-27: no Accept header gives 404; the image is an index, so the platform's manifest is a second fetch.
+    if (url.includes('/manifests/') && !String(init?.headers?.accept).includes('application/vnd.oci.image.index.v1+json')) return { status: 404, text: async () => '{}' }
+    if (url.includes('/manifests/sha256:a')) return r({ manifests: [{ digest: 'sha256:11arm', platform: { os: 'linux', architecture: 'arm64' } }, { digest: 'sha256:11amd', platform: { os: 'linux', architecture: 'amd64' } }] })
+    if (url.includes('/manifests/sha256:11amd')) return r({ config: { digest: 'sha256:c' } })
     if (url.includes('/blobs/')) return r({ config: { Labels: { 'org.automata.runner-version': '2.338.2' } } })
     if (url.includes('/repos/actions/runner/releases/tags/v2.338.2')) return r({ tag_name: 'v2.338.2', published_at: '2026-11-01T00:00:00Z' })
     if (url.includes('/repos/actions/runner/releases/latest')) return r({ tag_name: 'v2.340.0', published_at: '2026-11-20T00:00:00Z' })
@@ -73,6 +76,9 @@ describe('preflight', () => {
     const { p } = setup()
     expect((await preflight({ ...p, lastSweep: p.now - 3 * 3_600_000 })).filter((r) => !r.ok)[0].name).toBe('Sweep ran lately')
     expect((await preflight({ ...p, lastSweep: null })).filter((r) => !r.ok)[0].detail).toContain('never run')
+    // a schedule GitHub has not yet started is given a day
+    expect((await preflight({ ...p, lastSweep: null, workflowCreated: p.now - 3 * 3_600_000 })).filter((r) => !r.ok)).toEqual([])
+    expect((await preflight({ ...p, lastSweep: null, workflowCreated: p.now - 30 * 3_600_000 })).filter((r) => !r.ok)[0].detail).toContain('never run')
     expect((await preflight({ ...p, lastSweep: p.now - 1.9 * 3_600_000 })).filter((r) => !r.ok)).toEqual([])
   })
   test('fails when the image runner is more than 30 days behind the latest release', async () => {
