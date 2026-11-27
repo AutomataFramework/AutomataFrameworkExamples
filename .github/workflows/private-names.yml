@@ -1,0 +1,58 @@
+# Fails when a private name (from the PRIVATE_NAMES secret) is in a pull request's files, file paths, commit messages,
+# title, description or branch name, or on `main`. See `scripts/check-private-names.ts`.
+#
+# Safety: pull requests run on `pull_request_target`, so this file and the script always come from `main`, never from
+# the pull request, and a fork's pull request cannot change what runs next to the secret. The pull request's files are
+# checked out as data into `pr/` and nothing in them is run. The token can only read.
+#
+# Because `main`'s copy runs, a change to this file takes effect after it merges: its first run is the push to `main`.
+name: private-names
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  push:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-names-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
+
+jobs:
+  private-names:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: The checker, from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
+          path: trusted
+          persist-credentials: false
+      - name: What is being checked, as data only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - name: The secret is read and a planted name is found
+        env:
+          PRIVATE_NAMES: ${{ secrets.PRIVATE_NAMES }}
+        run: node trusted/scripts/check-private-names.ts --self-test
+      - name: No private name in the change
+        env:
+          PRIVATE_NAMES: ${{ secrets.PRIVATE_NAMES }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          RANGE: ${{ github.event_name == 'pull_request_target' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || (github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && format('{0}..{1}', github.event.before, github.sha)) || '' }}
+        run: node trusted/scripts/check-private-names.ts pr "$RANGE"

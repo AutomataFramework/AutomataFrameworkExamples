@@ -1,0 +1,76 @@
+# The merge gate on GitHub's runners, which are free on this public repo. `checks` runs the Node tests and the
+# content-licence check, `commit-authors` checks the names and words of a pull request, and `gate` is the one check
+# `main` requires: it passes only when every job that applies ran and passed. The private-names check is its own
+# workflow (`private-names.yml`), because it needs a secret that a fork's pull request must never reach. Every action
+# is pinned to a commit.
+name: ci
+
+on:
+  pull_request:
+    # `ready_for_review` starts a run as a draft is handed over; `edited` checks a new title or description.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  push:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}
+  # A newer push stops the run it replaces; runs on main are never cancelled, so every merge gets its own result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - name: Every content file is under a content notice
+        run: node scripts/check-content-license.ts
+
+  commit-authors:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - run: node scripts/check-commit-authors.ts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          QUEUE_REF: ${{ github.event.merge_group.head_ref }}
+
+  gate:
+    needs: [checks, commit-authors]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every check that applies ran and passed
+        env:
+          CHECKS: ${{ needs.checks.result }}
+          AUTHORS: ${{ needs.commit-authors.result }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          echo "checks: $CHECKS, commit-authors: $AUTHORS"
+          [ "$CHECKS" = success ] || exit 1
+          if [ "$EVENT" = push ]; then [ "$AUTHORS" = skipped ]; else [ "$AUTHORS" = success ]; fi
