@@ -13,9 +13,18 @@ export function jobsOf(text: string): Map<string, string> {
 import { SMOKE_TIMEOUT_MIN } from '../../scripts/gpu/config.ts'
 import { envProblems } from '../../scripts/gpu/smoke/checks.ts'
 
-const POD_JOBS = ['pod-start', 'gpu-smoke', 'watch', 'pod-stop']
-/** The jobs `gpu-smoke` may wait for: the two that make its pod, and the one that builds what it opens (no other). */
-const SMOKE_MAY_NEED = ['plan', 'pod-start', 'build-games']
+// The jobs that start, hold or stop a pod, or build what the pod opens: all of them refuse a fork.
+const POD_JOBS = ['pod-start', 'gpu-smoke', 'watch', 'pod-stop', 'build-games']
+/** What `gpu-smoke` waits for, exactly: the plan, the pod that was made for it, and the build of what it opens. */
+const SMOKE_NEEDS = ['build-games', 'plan', 'pod-start']
+/** The job that may read a secret or a variable, and the line in its `if` that keeps a fork out of it. */
+const SECRET_JOBS: Record<string, string> = {
+  'pod-start': "needs.plan.outputs.fork != 'true'",
+  'pod-stop': "needs.plan.outputs.fork != 'true'",
+  ledger: "needs.pod-stop.result != 'skipped'",
+  sweep: "github.event_name == 'schedule'",
+  preflight: "github.event_name == 'workflow_dispatch'",
+}
 
 /** The job names a job lists under `needs`, written as `[a, b]`, as `a`, or as a block list. */
 export function needsOf(job: string): string[] {
@@ -34,6 +43,8 @@ export function gpuProblems(text: string): string[] {
   // Triggers.
   const on = text.slice(text.indexOf('\non:'), text.indexOf('\npermissions:')).replace(/#.*$/gm, '')
   if (/\bedited\b/.test(on)) p.push('`edited` is in the triggers: a title change would start a pod')
+  // A fork's pull request never runs this file with the base's secrets: no `pull_request_target`.
+  if (/pull_request_target/.test(on)) p.push('gpu.yml runs on pull_request_target')
   // No workflow-level env.
   if (/^env:/m.test(text)) p.push('a workflow-level `env`')
   // Every job has a timeout, and it is the number the spec names.
@@ -54,16 +65,21 @@ export function gpuProblems(text: string): string[] {
     if (!['needs.plan.outputs.apply', 'needs.plan.outputs.fork', 'needs.pod-start.outputs.label'].includes(m[0])) p.push(`gpu-smoke reads ${m[0]}`)
   }
   if (!/permissions: \{\}/.test(smoke)) p.push('gpu-smoke has permissions other than `{}`')
-  // It may wait for the build job and open what that built, from this run: no run id, no token, no other repository.
-  for (const n of needsOf(smoke)) if (!SMOKE_MAY_NEED.includes(n)) p.push(`gpu-smoke needs ${n}, which a pod's job may not wait for`)
+  // The pod's job reads no secret and no variable in any spelling, and holds no token.
+  if (/secrets\b|\binherit\b|github\.token|GITHUB_TOKEN|toJSON\(vars\)/.test(smoke)) p.push('gpu-smoke reaches a secret, a variable or a token')
+  // It waits for the build job and no other but its own two, and opens what that built, from this run: no run id, no token, no other repository.
+  const smokeNeeds = needsOf(smoke).sort()
+  if (smokeNeeds.join(',') !== SMOKE_NEEDS.join(',')) p.push(`gpu-smoke needs ${smokeNeeds.join(', ') || 'nothing'}, not exactly ${SMOKE_NEEDS.join(', ')}`)
   for (const d of smoke.matchAll(/uses: actions\/download-artifact@[^\n]*\n((?: {8,}.+\n)*)/g)) {
     for (const k of ['run-id', 'github-token', 'repository']) {
       if (new RegExp(`^ {10}${k}:`, 'm').test(d[1])) p.push(`gpu-smoke downloads an artifact with ${k}, so it is not this run's own`)
     }
   }
-  // The build job runs on GitHub's runners, never a pod, and holds no secret or variable.
-  const build = need('build-games')
-  if (build && /runs-on:.*self-hosted/.test(build)) p.push('build-games does not run on a GitHub runner')
+  // Every job but the smoke runs on GitHub's own runner, spelled exactly; the build job is not left to a loose match.
+  for (const [id, body] of jobs) {
+    if (id !== 'gpu-smoke' && !/^ {4}runs-on: ubuntu-latest$/m.test(body)) p.push(`job ${id} does not run on \`ubuntu-latest\``)
+  }
+  if (!jobs.has('build-games')) p.push('the build-games job is missing')
   if (!smoke.includes("runs-on: [self-hosted, '${{ needs.pod-start.outputs.label }}']")) p.push('gpu-smoke does not ask for its own pod label')
   // pod-start gives out the pod id and the label only.
   const outputs = /\n {4}outputs:\n((?: {6}.+\n)+)/.exec(need('pod-start'))?.[1] ?? ''
@@ -87,13 +103,23 @@ export function gpuProblems(text: string): string[] {
   }
   // watch has the one permission and no other secret.
   if (!/permissions:\n {6}actions: write\n(?! {6})/.test(need('watch'))) p.push('watch has permissions other than `actions: write`')
-  // An upload keeps for 1 to 3 days (the build job's keeps 1).
-  for (const u of text.matchAll(/uses: actions\/upload-artifact@[^\n]*\n((?: {8,}.+\n)*)/g)) {
-    if (!/retention-days: [123]\n/.test(u[1])) p.push('an upload without `retention-days: 3` (the build job may keep 1)')
+  // Every upload has a retention: the build job's keeps 1 day, the smoke picture 3.
+  for (const [id, body] of jobs) for (const u of body.matchAll(/uses: actions\/upload-artifact@[^\n]*\n((?: {8,}.+\n)*)/g)) {
+    const want = id === 'build-games' ? 1 : 3
+    if (!new RegExp(`retention-days: ${want}\\n`).test(u[1])) p.push(`an upload in ${id} without \`retention-days: ${want}\``)
+  }
+  // Only the jobs named here read a secret or a variable, and each has the line that keeps a fork out.
+  for (const [id, body] of jobs) {
+    if (!/secrets\.(?!GITHUB_TOKEN)|\bvars\./.test(body)) continue
+    const guard = SECRET_JOBS[id]
+    if (!guard) p.push(`job ${id} reads a secret or a variable, which only ${Object.keys(SECRET_JOBS).join(', ')} may`)
+    else if (!(/^ {4}if: .*$/m.exec(body)?.[0] ?? '').includes(guard) && !(id === 'preflight' && /^ {4}if: .*push/m.test(body))) p.push(`job ${id} reads a secret without \`${guard}\` in its \`if\``)
   }
   // The aggregate: always, every job's result, and the script that fails a cancelled job.
   const gpu = need('gpu')
   if (!/if: always\(\)/.test(gpu)) p.push('the `gpu` aggregate has no `if: always()`')
+  const gpuNeeds = needsOf(gpu).sort().join(',')
+  if (gpuNeeds !== 'gpu-smoke,plan,pod-start,pod-stop,watch') p.push(`the \`gpu\` aggregate waits for ${gpuNeeds}, not exactly the five jobs of a run (a build that fails skips gpu-smoke, which fails it)`)
   for (const j of ['plan', 'pod-start', 'gpu-smoke', 'watch', 'pod-stop']) {
     if (!gpu.includes(`needs.${j}.result`)) p.push(`the \`gpu\` aggregate does not read ${j}'s result`)
   }

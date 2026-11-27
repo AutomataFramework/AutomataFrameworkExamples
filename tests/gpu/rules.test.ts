@@ -1,14 +1,13 @@
-// The loosened pod rules (unit U2-1): they accept today's `gpu.yml` and the one the next unit brings, in which
-// `gpu-smoke` also needs a `build-games` job, downloads that run's artifact and may run 30 minutes. The new shape is
-// made here from the real file, so no workflow file changes in this unit. Each loosening is shown not to open a hole.
+// The pod rules on the new shape only (unit U2-3): `gpu-smoke` needs `build-games`, downloads that run's artifact and may
+// run up to 30 minutes. U2-1 had them accept both shapes; the old one is no longer allowed. Each rule is shown not to
+// open a hole by breaking the real file.
 import { readFileSync } from 'node:fs'
 import { describe, test } from 'node:test'
 import { expect } from '../expect.ts'
 import { gpuProblems } from '../workflows/gpu-rules.ts'
 
 const file = readFileSync(new URL('../../.github/workflows/gpu.yml', import.meta.url), 'utf8')
-const today = todayShape(file)
-const SHA = 'a'.repeat(40)
+const SHA = /actions\/download-artifact@([0-9a-f]{40})/.exec(file)![1]
 
 function replaced(text: string, from: string | RegExp, to: string): string {
   const out = text.replace(from, to)
@@ -16,105 +15,58 @@ function replaced(text: string, from: string | RegExp, to: string): string {
   return out
 }
 
-const BUILD_JOB = `  build-games:
-    needs: [plan]
-    if: needs.plan.outputs.apply == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@${SHA} # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/upload-artifact@${SHA} # v7.0.2
-        with:
-          name: built-games
-          path: dist
-          retention-days: 1
-          if-no-files-found: error
-
-`
-const DOWNLOAD = `      - uses: actions/download-artifact@${SHA} # v7.0.0
-        with:
-          name: built-games
-          path: \${{ runner.temp }}/built
-`
-
-/** Today's shape from either file: the build job, the build wait, the downloading and harness steps taken out again. */
-function todayShape(text: string): string {
-  return text
-    .replace(/\n {2}build-games:\n[\s\S]*?(?=\n {2}gpu-smoke:\n)/, '')
-    .replace('    needs: [plan, pod-start, build-games]\n', '    needs: [plan, pod-start]\n')
-    .replace(/      # Everything drawn[\s\S]*?run: pnpm harness\n/, '')
-    .replace(/(  gpu-smoke:[\s\S]*?timeout-minutes: )30/, '$115')
-}
-
-/**
- * What U2-2 brings: the build job, `gpu-smoke` needing it, downloading its artifact, 30 minutes. It is made from today's
- * shape, so it is the same whether the file is today's or already the new one.
- */
-function next(source: string = file): string {
-  const text = todayShape(source)
-  let t = replaced(text, '\n  gpu-smoke:\n', `\n${BUILD_JOB}  gpu-smoke:\n`)
-  t = replaced(t, '    needs: [plan, pod-start]\n    if: needs.plan.outputs.apply == \'true\' && needs.plan.outputs.fork != \'true\' && github.event_name != \'workflow_dispatch\'\n    runs-on: [self-hosted', '    needs: [plan, pod-start, build-games]\n    if: needs.plan.outputs.apply == \'true\' && needs.plan.outputs.fork != \'true\' && github.event_name != \'workflow_dispatch\'\n    runs-on: [self-hosted')
-  t = replaced(t, /(  gpu-smoke:[\s\S]*?timeout-minutes: )15/, '$130')
-  t = replaced(t, '      - name: The GPU, the key\'s scope', `${DOWNLOAD}      - name: The GPU, the key's scope`)
-  return t
-}
+const next = (): string => file
 
 const smokeJob = (text: string): string => /\n  gpu-smoke:\n[\s\S]*?\n  watch:/.exec(text)![0]
 const has = (text: string, part: string): boolean => gpuProblems(text).some((x) => x.includes(part))
 
-describe('the pod rules accept both shapes', () => {
-  test('the gpu.yml in the repo, whichever of the two shapes it is', () => {
+describe('the pod rules hold the new shape', () => {
+  test('the gpu.yml in the repo', () => {
     expect(gpuProblems(file)).toEqual([])
   })
-  test('today\'s shape', () => {
-    expect(gpuProblems(today)).toEqual([])
-  })
-  test('the next one: build-games, its artifact downloaded, 30 minutes', () => {
-    expect(gpuProblems(next())).toEqual([])
+  test('the old shape is refused: no build-games, and gpu-smoke not waiting for it', () => {
+    expect(has(replaced(file, 'needs: [plan, pod-start, build-games]', 'needs: [plan, pod-start]'), 'gpu-smoke needs plan, pod-start, not exactly')).toBe(true)
+    expect(has(replaced(file, /\n {2}build-games:\n[\s\S]*?(?=\n {2}gpu-smoke:\n)/, ''), 'the build-games job is missing')).toBe(true)
   })
   test('gpu-smoke may run any time up to 30 minutes, and 31 is too long', () => {
-    expect(gpuProblems(replaced(today, /(  gpu-smoke:[\s\S]*?timeout-minutes: )15/, '$130'))).toEqual([])
-    expect(has(replaced(today, /(  gpu-smoke:[\s\S]*?timeout-minutes: )15/, '$131'), 'gpu-smoke has timeout-minutes 31')).toBe(true)
+    expect(gpuProblems(replaced(file, /(  gpu-smoke:[\s\S]*?timeout-minutes: )15/, '$130'))).toEqual([])
+    expect(has(replaced(file, /(  gpu-smoke:[\s\S]*?timeout-minutes: )15/, '$131'), 'gpu-smoke has timeout-minutes 31')).toBe(true)
   })
   test('the other jobs keep their exact limits', () => {
-    expect(has(replaced(today, '    timeout-minutes: 12\n', '    timeout-minutes: 30\n'), 'timeout-minutes 30, not 12')).toBe(true)
-    expect(has(replaced(today, /(  watch:[\s\S]*?timeout-minutes: )20/, '$130'), 'job watch has timeout-minutes 30, not 20')).toBe(true)
+    expect(has(replaced(file, '    timeout-minutes: 12\n', '    timeout-minutes: 30\n'), 'timeout-minutes 30, not 12')).toBe(true)
+    expect(has(replaced(file, /(  watch:[\s\S]*?timeout-minutes: )20/, '$130'), 'job watch has timeout-minutes 30, not 20')).toBe(true)
   })
 })
 
-describe('the loosening opens no hole', () => {
-  test('a secret in gpu-smoke still fails, in the new shape too', () => {
+describe('the new shape opens no hole', () => {
+  test('a secret in gpu-smoke still fails', () => {
     expect(has(replaced(next(), '    permissions: {}\n    steps:\n      - uses: actions/checkout', '    permissions: {}\n    env:\n      K: ${{ secrets.RUNPOD_API_KEY }}\n    steps:\n      - uses: actions/checkout'), 'gpu-smoke names `secrets.`')).toBe(true)
   })
-  test('a variable in gpu-smoke still fails, in the new shape too', () => {
+  test('a variable in gpu-smoke still fails', () => {
     expect(has(replaced(next(), '      - name: Draw with WebGL on the GPU\n', '      - name: Draw with WebGL on the GPU\n        if: ${{ vars.EXAMPLES_CI_APP_ID }}\n'), 'gpu-smoke names `vars.`')).toBe(true)
   })
   test('a fork reaching a pod still fails: no fork refusal on gpu-smoke', () => {
     expect(has(replaced(next(), "needs.plan.outputs.apply == 'true' && needs.plan.outputs.fork != 'true' && github.event_name != 'workflow_dispatch'\n    runs-on: [self-hosted", "needs.plan.outputs.apply == 'true'\n    runs-on: [self-hosted"), 'gpu-smoke has no fork refusal')).toBe(true)
   })
   test('an unpinned action still fails, in the downloading step and in build-games', () => {
-    expect(has(replaced(next(), `actions/download-artifact@${SHA} # v7.0.0`, 'actions/download-artifact@v7'), 'actions/download-artifact is not pinned')).toBe(true)
-    expect(has(replaced(next(), `actions/upload-artifact@${SHA} # v7.0.2\n        with:\n          name: built-games`, 'actions/upload-artifact@v7\n        with:\n          name: built-games'), 'actions/upload-artifact is not pinned')).toBe(true)
+    expect(has(replaced(next(), `actions/download-artifact@${SHA} # v8.0.1`, 'actions/download-artifact@v7'), 'actions/download-artifact is not pinned')).toBe(true)
+    expect(has(replaced(next(), /actions\/upload-artifact@[0-9a-f]{40} # v7\.0\.2\n        with:\n          name: games-built/, 'actions/upload-artifact@v7\n        with:\n          name: games-built'), 'actions/upload-artifact is not pinned')).toBe(true)
   })
-  test('gpu-smoke may need build-games and no other new job', () => {
+  test('gpu-smoke needs build-games and nothing beyond plan and pod-start', () => {
     for (const other of ['fresh-agent-smooth', 'build', 'ledger', 'gpu']) {
       const t = replaced(next(), 'needs: [plan, pod-start, build-games]', `needs: [plan, pod-start, build-games, ${other}]`)
-      expect(has(t, `gpu-smoke needs ${other}`)).toBe(true)
+      expect(has(t, 'not exactly build-games, plan, pod-start')).toBe(true)
     }
     expect(has(replaced(next(), 'needs: [plan, pod-start, build-games]', 'needs: [plan, pod-start, fresh-agent-smooth]'), 'gpu-smoke needs fresh-agent-smooth')).toBe(true)
   })
   test('gpu-smoke needs written as a list is read too', () => {
     const t = replaced(next(), 'needs: [plan, pod-start, build-games]', 'needs:\n      - plan\n      - pod-start\n      - build-games')
     expect(gpuProblems(t)).toEqual([])
-    expect(has(replaced(t, '      - build-games', '      - build-games\n      - fresh-agent-smooth'), 'gpu-smoke needs fresh-agent-smooth')).toBe(true)
+    expect(has(replaced(t, '      - build-games', '      - build-games\n      - fresh-agent-smooth'), 'not exactly build-games, plan, pod-start')).toBe(true)
   })
   test('the download is this run\'s artifact: no run id, no token, no other repository', () => {
     for (const [key, value] of [['run-id', '12345'], ['github-token', '${{ github.token }}'], ['repository', 'someone/else']]) {
-      const t = replaced(next(), '          name: built-games\n          path: ${{ runner.temp }}/built\n', `          name: built-games\n          path: \${{ runner.temp }}/built\n          ${key}: ${value}\n`)
+      const t = replaced(next(), /(actions\/download-artifact@[^\n]*\n        with:\n          name: games-built\n)/, `$1          ${key}: ${value}\n`)
       expect(has(t, `gpu-smoke downloads an artifact with ${key}`)).toBe(true)
     }
   })
@@ -123,17 +75,17 @@ describe('the loosening opens no hole', () => {
     expect(has(t, 'gpu-smoke reads needs.build-games.outputs.token')).toBe(true)
   })
   test('build-games runs on GitHub\'s runners and names no secret or variable', () => {
-    expect(has(replaced(next(), '    runs-on: ubuntu-latest\n    timeout-minutes: 20', '    runs-on: [self-hosted, x]\n    timeout-minutes: 20'), 'build-games does not run on a GitHub runner')).toBe(true)
+    expect(has(replaced(next(), /(  build-games:[\s\S]*?runs-on: )ubuntu-latest/, '$1[self-hosted, x]'), 'job build-games does not run on `ubuntu-latest`')).toBe(true)
     expect(has(replaced(next(), /(  build-games:[\s\S]*?permissions:\n      contents: read\n)/, '$1    env:\n      K: ${{ secrets.RUNPOD_API_KEY }}\n'), 'build-games reads a secret or a variable')).toBe(true)
     expect(has(replaced(next(), /(  build-games:[\s\S]*?permissions:\n      contents: read\n)/, '$1    env:\n      K: ${{ vars.EXAMPLES_CI_APP_ID }}\n'), 'build-games reads a secret or a variable')).toBe(true)
   })
   test('build-games has a time limit', () => {
-    expect(has(replaced(next(), '    timeout-minutes: 20\n    permissions:\n      contents: read\n', '    permissions:\n      contents: read\n'), 'job build-games has no timeout-minutes')).toBe(true)
+    expect(has(replaced(next(), '    timeout-minutes: 15\n    permissions:\n      contents: read\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n      - id: has', '    permissions:\n      contents: read\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n      - id: has'), 'job build-games has no timeout-minutes')).toBe(true)
   })
   test('an upload keeps 1 to 3 days, never longer and never forever', () => {
-    expect(has(replaced(next(), 'retention-days: 1\n', 'retention-days: 4\n'), 'an upload without `retention-days: 3`')).toBe(true)
-    expect(has(replaced(next(), 'retention-days: 1\n', ''), 'an upload without `retention-days: 3`')).toBe(true)
-    expect(gpuProblems(replaced(next(), 'retention-days: 1\n', 'retention-days: 3\n'))).toEqual([])
+    expect(has(replaced(next(), 'retention-days: 1\n', 'retention-days: 4\n'), 'an upload in build-games without `retention-days: 1`')).toBe(true)
+    expect(has(replaced(next(), 'retention-days: 1\n', ''), 'an upload in build-games without `retention-days: 1`')).toBe(true)
+    expect(has(replaced(next(), 'retention-days: 1\n', 'retention-days: 3\n'), 'build-games without `retention-days: 1`')).toBe(true)
   })
   test('the new smoke job is still the one that asks for its own pod label', () => {
     expect(smokeJob(next())).toContain("runs-on: [self-hosted, '${{ needs.pod-start.outputs.label }}']")
