@@ -9,17 +9,17 @@ importers:
   .:
     devDependencies:
       '@automataframework/2d':
-        specifier: 0.0.1-preview.15.sha-23a3e44
-        version: 0.0.1-preview.15.sha-23a3e44
+        specifier: 0.0.1-preview.16.sha-dfb9cf4
+        version: 0.0.1-preview.16.sha-dfb9cf4
       '@automataframework/core':
-        specifier: 0.0.1-preview.15.sha-23a3e44
-        version: 0.0.1-preview.15.sha-23a3e44
+        specifier: 0.0.1-preview.16.sha-dfb9cf4
+        version: 0.0.1-preview.16.sha-dfb9cf4
       '@automataframework/tools':
-        specifier: 0.0.1-preview.15.sha-23a3e44
-        version: 0.0.1-preview.15.sha-23a3e44
+        specifier: 0.0.1-preview.16.sha-dfb9cf4
+        version: 0.0.1-preview.16.sha-dfb9cf4
       create-automata:
-        specifier: 0.0.1-preview.15.sha-23a3e44
-        version: 0.0.1-preview.15.sha-23a3e44
+        specifier: 0.0.1-preview.16.sha-dfb9cf4
+        version: 0.0.1-preview.16.sha-dfb9cf4
       knip:
         specifier: 6.48.0
         version: 6.48.0
@@ -35,16 +35,16 @@ importers:
 
 packages:
 
-  '@automataframework/2d@0.0.1-preview.15.sha-23a3e44':
-    resolution: {integrity: sha512-h2c6QdNm2I3KHhkUj9dYdnIr5jPt5N0zp+mHK1xYHC0kPgbmioVwf1FvRVXIBAcp6RExvu/BSa6VxOoLIkI2TA==}
+  '@automataframework/2d@0.0.1-preview.16.sha-dfb9cf4':
+    resolution: {integrity: sha512-1OVwAG+23Aa/il+DpBVsK1v+GkJ72mSrgAufLbSV518t4su0hNFnvH8tmu3XmJNhil4lTJGpFgMk2wFYmShc9g==}
     engines: {node: '>=24'}
 
-  '@automataframework/core@0.0.1-preview.15.sha-23a3e44':
-    resolution: {integrity: sha512-cbNEHzrbIPhRnsCSfHTbfg0jcGM9YZLYI33+r7ASgJywgJdH3MdDGQd08c+TNlEi5GVwf/NiR7sHMylmPfvZDg==}
+  '@automataframework/core@0.0.1-preview.16.sha-dfb9cf4':
+    resolution: {integrity: sha512-mLAf2yo+BbVsG3XMVMhwp+o90SrIwkbBXqbhXJ/+8/8yx1qyKv5x6FgKcOkr3fnhIf3nFTCbx9bny1LmMNQMyQ==}
     engines: {node: '>=24'}
 
-  '@automataframework/tools@0.0.1-preview.15.sha-23a3e44':
-    resolution: {integrity: sha512-8VXBbq/90CKaTA3/fOyZClpWfJYR0jNnzZL5J1UxxjXe9mkkarlXSIxhxaeikx8LB2W2ak81uTyQL3sasqfVZw==}
+  '@automataframework/tools@0.0.1-preview.16.sha-dfb9cf4':
+    resolution: {integrity: sha512-fx2JFePbjkZUavEXyqj43Dem7kShX7GstpUt9AnFAN+fvk3PwtFF4Pc8/3bMruqn+02dcD6cYMaBK2d1E4LOyA==}
     engines: {node: '>=24'}
     hasBin: true
 
@@ -579,8 +579,8 @@ packages:
     resolution: {integrity: sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw==}
     engines: {node: '>= 0.10'}
 
-  create-automata@0.0.1-preview.15.sha-23a3e44:
-    resolution: {integrity: sha512-HXnh+us77482kCqDAdOkTJkBzlgk2hjZu+VPZD/uSCiGhPqFpMIDr9OF/wGS8lLWrq/3fqcWW6vrJcPeWX1TWg==}
+  create-automata@0.0.1-preview.16.sha-dfb9cf4:
+    resolution: {integrity: sha512-pS7QWyAQIq/iscMet8ysYCQ22jYrlpDr+YhQZdapnGGCDcoFRkbM92HMjEP3wosqgU1HNOZwylp5ueSEN6qFTQ==}
     engines: {node: '>=24'}
     hasBin: true
 
@@ -1151,18 +1151,18 @@ packages:
 
 snapshots:
 
-  '@automataframework/2d@0.0.1-preview.15.sha-23a3e44':
+  '@automataframework/2d@0.0.1-preview.16.sha-dfb9cf4':
     dependencies:
-      '@automataframework/core': 0.0.1-preview.15.sha-23a3e44
+      '@automataframework/core': 0.0.1-preview.16.sha-dfb9cf4
       pixi.js: 8.23.0
 
-  '@automataframework/core@0.0.1-preview.15.sha-23a3e44':
+  '@automataframework/core@0.0.1-preview.16.sha-dfb9cf4':
     dependencies:
       zod: 4.6.6
 
-  '@automataframework/tools@0.0.1-preview.15.sha-23a3e44':
+  '@automataframework/tools@0.0.1-preview.16.sha-dfb9cf4':
     dependencies:
-      '@automataframework/core': 0.0.1-preview.15.sha-23a3e44
+      '@automataframework/core': 0.0.1-preview.16.sha-dfb9cf4
       '@modelcontextprotocol/sdk': 1.32.2(zod@4.6.6)
       playwright-core: 1.65.1
       zod: 4.6.6
@@ -1522,7 +1522,7 @@ snapshots:
       object-assign: 4.1.1
       vary: 1.1.2
 
-  create-automata@0.0.1-preview.15.sha-23a3e44: {}
+  create-automata@0.0.1-preview.16.sha-dfb9cf4: {}
 
   cross-spawn@7.0.6:
     dependencies:

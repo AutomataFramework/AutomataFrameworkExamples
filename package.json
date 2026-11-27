@@ -14,10 +14,10 @@
     "newcomer": "node harness/newcomer.ts"
   },
   "devDependencies": {
-    "@automataframework/2d": "0.0.1-preview.15.sha-23a3e44",
-    "@automataframework/core": "0.0.1-preview.15.sha-23a3e44",
-    "@automataframework/tools": "0.0.1-preview.15.sha-23a3e44",
-    "create-automata": "0.0.1-preview.15.sha-23a3e44",
+    "@automataframework/2d": "0.0.1-preview.16.sha-dfb9cf4",
+    "@automataframework/core": "0.0.1-preview.16.sha-dfb9cf4",
+    "@automataframework/tools": "0.0.1-preview.16.sha-dfb9cf4",
+    "create-automata": "0.0.1-preview.16.sha-dfb9cf4",
     "knip": "6.48.0",
     "oxlint": "1.95.0",
     "playwright-core": "1.65.1",
