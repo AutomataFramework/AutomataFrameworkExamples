@@ -43,6 +43,12 @@ describe('scanning', () => {
     expect(text).toContain('games/a/notes.txt, line 2')
     expect(text.toLowerCase()).not.toContain('heron')
   })
+  test("a fork's pull request is told only that a name was found", () => {
+    const findings = scan([{ where: 'guesses.txt', text: 'a\nquiet heron\nmoss' }], NAMES)
+    const text = explain(findings, true)
+    expect(text).toContain('A private name is in this change')
+    for (const leak of ['guesses.txt', 'line', 'number', 'heron', 'moss']) expect(text.toLowerCase()).not.toContain(leak)
+  })
   test('a name split across two lines is found', () => {
     expect(scan([{ where: 'the description', text: 'about the quiet\nheron' }], NAMES)).toEqual([
       { where: 'the description (across lines)', name: 1 },

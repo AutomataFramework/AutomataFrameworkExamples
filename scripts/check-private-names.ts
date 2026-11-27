@@ -7,8 +7,9 @@
 // `PRIVATE_NAMES` secret, a comma-separated list, and this script never prints one. A finding says where, and which
 // entry of the list (by its number) matched.
 //
-// It only reads. In CI it runs from `main`'s copy against the pull request's files as plain data, so a pull request
-// from a fork never gets the secret into code it wrote. `--self-test` plants the first name in a throwaway git repo
+// It only reads. In CI the script comes from the base commit (`main`, or the merge queue's base), run against the
+// pull request's files as plain data, so a pull request never gets the secret into code it wrote. For a fork's pull
+// request it never says where a name was found (see `explain`). `--self-test` plants the first name in a throwaway git repo
 // (in a file, in a prompt file, in a commit message, in a description and in a branch name) and fails unless every
 // plant is found, so a run proves the secret is read and matched without the name ever reaching a public page.
 import { execFileSync } from 'node:child_process'
@@ -114,8 +115,18 @@ export function commitsOf(dir: string, range: string): Source[] {
     })
 }
 
-/** The text a person reads when the check fails. Names stay out of it. */
-export function explain(findings: readonly Finding[]): string {
+/**
+ * The text a person reads when the check fails. Names stay out of it. For a fork's pull request it says only that a
+ * name was found: the log is public, and a fork that learned which line matched could test thousands of guesses in
+ * one run. The Owner reads the full list by running the check on the branch with the secret.
+ */
+export function explain(findings: readonly Finding[], fromFork = false): string {
+  if (fromFork) {
+    return [
+      'A private name is in this change, so it cannot go in. Where it is is not shown for a pull request from a fork.',
+      'The maintainers will tell you what to change.',
+    ].join('\n')
+  }
   return [
     'A private name is in this change. Take it out before this can go in:',
     '',
@@ -201,7 +212,7 @@ function main(): void {
     console.log(`No private name in ${sources.length} places looked at (${names.length} names).`)
     return
   }
-  console.error(explain(findings))
+  console.error(explain(findings, process.env.FROM_FORK === 'true'))
   process.exitCode = 1
 }
 

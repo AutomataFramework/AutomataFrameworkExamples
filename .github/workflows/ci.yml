@@ -1,4 +1,5 @@
-# The merge gate on GitHub's runners, which are free on this public repo. `checks` runs the Node tests and the
+# The merge gate on GitHub's runners, which are free on this public repo. `plan` decides which checks a change needs:
+# a pull request that changes only Markdown people read (CLAUDE.md and docs/) skips `checks`. `checks` runs the Node tests and the
 # content-licence check, `commit-authors` checks the names and words of a pull request, and `gate` is the one check
 # `main` requires: it passes only when every job that applies ran and passed. The private-names check is its own
 # workflow (`private-names.yml`), because it needs a secret that a fork's pull request must never reach. Every action
@@ -23,7 +24,36 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      docs: ${{ steps.plan.outputs.docs }}
+    steps:
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          docs=false
+          # A list GitHub cannot give (too large, or an error) runs everything, never less.
+          if [ "$EVENT" = pull_request ] &&
+            changed="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate --jq '.[].filename')" &&
+            [ -n "$changed" ]; then
+            printf 'This pull request changes:\n%s\n' "$changed"
+            if ! grep -qvE '^(CLAUDE\.md|docs/.+\.md)$' <<<"$changed"; then docs=true; fi
+          fi
+          echo "docs=$docs"
+          echo "docs=$docs" >> "$GITHUB_OUTPUT"
+
   checks:
+    needs: plan
+    if: needs.plan.outputs.docs != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -60,17 +90,20 @@ jobs:
           QUEUE_REF: ${{ github.event.merge_group.head_ref }}
 
   gate:
-    needs: [checks, commit-authors]
+    needs: [plan, checks, commit-authors]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Every check that applies ran and passed
         env:
+          PLAN: ${{ needs.plan.result }}
+          DOCS: ${{ needs.plan.outputs.docs }}
           CHECKS: ${{ needs.checks.result }}
           AUTHORS: ${{ needs.commit-authors.result }}
           EVENT: ${{ github.event_name }}
         run: |
-          echo "checks: $CHECKS, commit-authors: $AUTHORS"
-          [ "$CHECKS" = success ] || exit 1
+          echo "plan: $PLAN (docs only: $DOCS), checks: $CHECKS, commit-authors: $AUTHORS"
+          [ "$PLAN" = success ] || exit 1
+          if [ "$DOCS" = true ]; then [ "$CHECKS" = skipped ] || exit 1; else [ "$CHECKS" = success ] || exit 1; fi
           if [ "$EVENT" = push ]; then [ "$AUTHORS" = skipped ]; else [ "$AUTHORS" = success ]; fi

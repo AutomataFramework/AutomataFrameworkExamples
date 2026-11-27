@@ -1,11 +1,14 @@
 # Fails when a private name (from the PRIVATE_NAMES secret) is in a pull request's files, file paths, commit messages,
 # title, description or branch name, or on `main`. See `scripts/check-private-names.ts`.
 #
-# Safety: pull requests run on `pull_request_target`, so this file and the script always come from `main`, never from
-# the pull request, and a fork's pull request cannot change what runs next to the secret. The pull request's files are
-# checked out as data into `pr/` and nothing in them is run. The token can only read.
+# Safety: the script always comes from the base commit, never from the change: `main` for a pull request (which runs
+# on `pull_request_target`, so this file comes from `main` too) and the queue's base for a merge-queue run. The
+# change's files are checked out as data into `pr/` and nothing in them is run. The token can only read. For a fork's
+# pull request the script says only that a name was found, never where, since the log is public.
 #
-# Because `main`'s copy runs, a change to this file takes effect after it merges: its first run is the push to `main`.
+# One limit: in a merge-queue run GitHub takes this workflow file from the queue's merge commit, so an edit to this
+# file is trusted only once it has passed its review and been queued by a maintainer. A change to this file or the
+# script takes effect for pull requests after it merges: its first run is the push to `main`.
 name: private-names
 
 on:
@@ -31,7 +34,7 @@ jobs:
       - name: The checker, from main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
           path: trusted
           persist-credentials: false
       - name: What is being checked, as data only
@@ -54,5 +57,6 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          FROM_FORK: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository }}
           RANGE: ${{ github.event_name == 'pull_request_target' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || (github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && format('{0}..{1}', github.event.before, github.sha)) || '' }}
         run: node trusted/scripts/check-private-names.ts pr "$RANGE"

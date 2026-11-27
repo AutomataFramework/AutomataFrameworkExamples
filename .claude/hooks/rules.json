@@ -72,11 +72,14 @@
   },
   "mergeGreen": {
     "enabled": true,
-    "statuses": []
+    "statuses": [
+      "gate",
+      "private-names"
+    ]
   },
   "ruleMix": {
     "enabled": true,
-    "firstTimeSetup": true,
+    "firstTimeSetup": false,
     "rulePaths": [
       "CLAUDE.md",
       ".claude/skills/review/**",
