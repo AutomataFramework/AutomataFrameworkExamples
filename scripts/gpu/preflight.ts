@@ -20,6 +20,8 @@ export type Preflight = {
   now: number
   /** When the sweep last ran, or null when it never has. */
   lastSweep: number | null
+  /** When GitHub first saw `gpu.yml`, or null when unknown. GitHub can take hours to start a new schedule. */
+  workflowCreated?: number | null
 }
 
 async function step(name: string, run: () => Promise<string>): Promise<Result> {
@@ -33,6 +35,9 @@ async function step(name: string, run: () => Promise<string>): Promise<Result> {
 function must(what: string, status: number, wanted: (s: number) => boolean = (s) => s >= 200 && s < 300): void {
   if (!wanted(status)) throw new Error(`${what} answered ${status}`)
 }
+
+/** How long a new schedule is given to run its first sweep. */
+const SWEEP_FIRST_RUN_HOURS = 24
 
 export async function preflight(p: Preflight): Promise<Result[]> {
   const out: Result[] = []
@@ -77,7 +82,11 @@ export async function preflight(p: Preflight): Promise<Result[]> {
   )
   out.push(
     await step('Sweep ran lately', async () => {
-      if (p.lastSweep === null) throw new Error('the sweep has never run')
+      if (p.lastSweep === null) {
+        const age = p.workflowCreated == null ? Infinity : (p.now - p.workflowCreated) / 3_600_000
+        if (age <= SWEEP_FIRST_RUN_HOURS) return `the sweep has not run yet; the schedule is ${age.toFixed(1)} hours old and GitHub can take up to ${SWEEP_FIRST_RUN_HOURS} hours to start it`
+        throw new Error('the sweep has never run')
+      }
       const hours = (p.now - p.lastSweep) / 3_600_000
       if (hours > 2) throw new Error(`the sweep last ran ${hours.toFixed(1)} hours ago (GitHub may have turned schedules off)`)
       return `the sweep ran ${hours.toFixed(1)} hours ago`
@@ -115,8 +124,15 @@ export async function imageRunnerVersion(fetchFn: Fetch, ref: string): Promise<s
     return JSON.parse(await r.text())
   }
   const { token } = await json(`https://ghcr.io/token?scope=repository:${m[1]}:pull`)
-  const auth = { authorization: `Bearer ${token}`, accept: 'application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' }
-  const manifest = await json(`https://ghcr.io/v2/${m[1]}/manifests/${m[2]}`, auth)
+  // ghcr answers 404 to a manifest asked for without an Accept header, and a pushed image is often an index (one manifest per platform).
+  const accept = 'application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json,application/vnd.docker.distribution.manifest.list.v2+json'
+  const auth = { authorization: `Bearer ${token}`, accept }
+  let manifest = await json(`https://ghcr.io/v2/${m[1]}/manifests/${m[2]}`, auth)
+  if (Array.isArray(manifest.manifests)) {
+    const pick = manifest.manifests.find((x: any) => x.platform?.os === 'linux' && x.platform?.architecture === 'amd64')
+    if (!pick) throw new Error('the image has no linux/amd64 manifest')
+    manifest = await json(`https://ghcr.io/v2/${m[1]}/manifests/${pick.digest}`, auth)
+  }
   const config = await json(`https://ghcr.io/v2/${m[1]}/blobs/${manifest.config.digest}`, auth)
   const v = config.config?.Labels?.['org.automata.runner-version']
   if (typeof v !== 'string' || !/^\d+\.\d+\.\d+$/.test(v)) throw new Error('the image has no org.automata.runner-version label')
