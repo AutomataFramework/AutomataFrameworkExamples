@@ -51,16 +51,17 @@ const DEFAULT_LABELS = ['self-hosted', 'Linux', 'X64', 'ARM64']
 export type Runner = { id: number; name: string; status: string; labels?: { name: string }[] }
 
 /**
- * A just-in-time runner config with one custom label: the run's own (a replacement pod keeps the first pod's label,
- * so the job finds it). GitHub adds `self-hosted` and others by default;
- * the call is refused here when it does, because any job could then take the runner.
+ * A just-in-time runner config with `self-hosted` and one custom label: the run's own (a replacement pod keeps the first
+ * pod's label, so the job finds it). GitHub adds no label of its own to a runner config (measured 2026-11-27: a config
+ * asked for the custom label alone had no `self-hosted`, and `gpu-smoke`'s `runs-on: [self-hosted, <label>]` was never
+ * given to it). The call is refused here when GitHub adds any other label, because any job could then take the runner.
  */
 export async function makeJit(gh: Call, repo: string, name: string, label: string): Promise<{ jit: string; runnerId: number }> {
   const r = ok(
     'POST generate-jitconfig',
     await gh<{ runner: Runner; encoded_jit_config: string }>('POST', `/repos/${repo}/actions/runners/generate-jitconfig`, {
       name,
-      labels: [label],
+      labels: ['self-hosted', label],
       runner_group_id: 1,
       work_folder: '_work',
     }),
