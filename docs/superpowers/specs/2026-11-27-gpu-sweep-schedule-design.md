@@ -34,7 +34,7 @@ key, no new cost. This changes one line of both designs: Examples' "Editors uses
 
 ### Unit 1, Editors (`tools/ci/gate-worker/gate.ts`, its test, `this-repo`)
 
-- `sweep` also lists pods whose name starts `ax-ci-`. **This Examples pass runs first, right after the pod list and
+- `sweep` also lists pods whose name starts `ax-ci-`. **This Examples pass runs first, right after the pod list, before the ledger reconcile, and
   before the "no pod" early return and before the GitHub App token is asked for, and makes no GitHub call**, so it runs
   when Editors has no pod of its own and when GitHub is down (plan audit R1). One older than **50 minutes** (Examples' `SWEEP_AGE_MIN`) is
   deleted with `DELETE /v2/pods/<id>`. Its age is read as Examples' own sweep reads it (`podAgeMs`): the time in its
@@ -53,7 +53,7 @@ key, no new cost. This changes one line of both designs: Examples' "Editors uses
   today and asserts it stays; it changes on purpose (named in the pull request), and gains a young `ax-ci-` pod that
   must stay.
 
-### Unit 2, Examples (`scripts/gpu/preflight.ts`, `scripts/gpu/cli/preflight.ts`, `tests/gpu/preflight.test.ts`)
+### Unit 2, Examples (`scripts/gpu/preflight.ts`, `scripts/gpu/cli/preflight.ts`, `tests/gpu/preflight.test.ts`, `scripts/gpu/names.ts`, `tests/gpu/names-decide.test.ts`, `.claude/skills/this-repo/SKILL.md`)
 
 - New failing step **"No leftover pod"**: reads the pod list with the Examples RunPod key and fails naming every
   `ax-ci-*` pod older than 60 minutes (the 50-minute sweep age plus one 10-minute cron). This checks the outcome the

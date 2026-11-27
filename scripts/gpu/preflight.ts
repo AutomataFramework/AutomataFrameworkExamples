@@ -9,7 +9,7 @@ import type { Call, Fetch } from './http.ts'
 import type { Vars } from './budget.ts'
 
 /** A warning passes but is shown as one; only a failure stops the run. */
-export type Result = { name: string; ok: boolean; detail: string; warning?: boolean }
+export type Result = { name: string; ok: boolean; detail: string; warning?: true }
 
 /** GitHub supports a runner for about 30 days after a newer release; past that it is refused work. */
 export const RUNNER_WINDOW_DAYS = 30
