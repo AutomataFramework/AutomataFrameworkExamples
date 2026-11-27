@@ -6,7 +6,8 @@ import { describe, test } from 'node:test'
 import { expect } from '../expect.ts'
 import { gpuProblems } from '../workflows/gpu-rules.ts'
 
-const today = readFileSync(new URL('../../.github/workflows/gpu.yml', import.meta.url), 'utf8')
+const file = readFileSync(new URL('../../.github/workflows/gpu.yml', import.meta.url), 'utf8')
+const today = todayShape(file)
 const SHA = 'a'.repeat(40)
 
 function replaced(text: string, from: string | RegExp, to: string): string {
@@ -40,8 +41,21 @@ const DOWNLOAD = `      - uses: actions/download-artifact@${SHA} # v7.0.0
           path: \${{ runner.temp }}/built
 `
 
-/** What U2-2 is planned to bring: the build job, `gpu-smoke` needing it, downloading its artifact, 30 minutes. */
-function next(text: string = today): string {
+/** Today's shape from either file: the build job, the build wait, the downloading and harness steps taken out again. */
+function todayShape(text: string): string {
+  return text
+    .replace(/\n {2}build-games:\n[\s\S]*?(?=\n {2}gpu-smoke:\n)/, '')
+    .replace('    needs: [plan, pod-start, build-games]\n', '    needs: [plan, pod-start]\n')
+    .replace(/      # Everything drawn[\s\S]*?run: pnpm harness\n/, '')
+    .replace(/(  gpu-smoke:[\s\S]*?timeout-minutes: )30/, '$115')
+}
+
+/**
+ * What U2-2 brings: the build job, `gpu-smoke` needing it, downloading its artifact, 30 minutes. It is made from today's
+ * shape, so it is the same whether the file is today's or already the new one.
+ */
+function next(source: string = file): string {
+  const text = todayShape(source)
   let t = replaced(text, '\n  gpu-smoke:\n', `\n${BUILD_JOB}  gpu-smoke:\n`)
   t = replaced(t, '    needs: [plan, pod-start]\n    if: needs.plan.outputs.apply == \'true\' && needs.plan.outputs.fork != \'true\' && github.event_name != \'workflow_dispatch\'\n    runs-on: [self-hosted', '    needs: [plan, pod-start, build-games]\n    if: needs.plan.outputs.apply == \'true\' && needs.plan.outputs.fork != \'true\' && github.event_name != \'workflow_dispatch\'\n    runs-on: [self-hosted')
   t = replaced(t, /(  gpu-smoke:[\s\S]*?timeout-minutes: )15/, '$130')
@@ -53,7 +67,10 @@ const smokeJob = (text: string): string => /\n  gpu-smoke:\n[\s\S]*?\n  watch:/.
 const has = (text: string, part: string): boolean => gpuProblems(text).some((x) => x.includes(part))
 
 describe('the pod rules accept both shapes', () => {
-  test('today\'s gpu.yml', () => {
+  test('the gpu.yml in the repo, whichever of the two shapes it is', () => {
+    expect(gpuProblems(file)).toEqual([])
+  })
+  test('today\'s shape', () => {
     expect(gpuProblems(today)).toEqual([])
   })
   test('the next one: build-games, its artifact downloaded, 30 minutes', () => {
