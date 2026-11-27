@@ -65,7 +65,7 @@ jobs:
       contents: read
     env:
       # The pod image, pinned by digest. The image workflow writes the new digest to its summary and a session bumps it here.
-      GPU_IMAGE: ghcr.io/automataframework/ci-gpu@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      GPU_IMAGE: ghcr.io/automataframework/ci-gpu@sha256:5c3e4559c5317100ba8f0cc3bf875a0e3906261ab472dcf4a7c28978c4f6f377
     outputs:
       # Only these two, neither of them secret.
       pod: ${{ steps.create.outputs.pod }}
@@ -231,7 +231,7 @@ jobs:
       contents: read
       actions: read
     env:
-      GPU_IMAGE: ghcr.io/automataframework/ci-gpu@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      GPU_IMAGE: ghcr.io/automataframework/ci-gpu@sha256:5c3e4559c5317100ba8f0cc3bf875a0e3906261ab472dcf4a7c28978c4f6f377
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
