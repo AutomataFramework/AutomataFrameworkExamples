@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "id": "draw-shapes",
+  "name": "Draw shapes",
+  "size": [320, 180],
+  "languages": ["en"],
+  "start": "play",
+  "content": [],
+  "assets": []
+}

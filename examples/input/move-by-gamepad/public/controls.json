@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "id": "controls",
+  "kind": "controls",
+  "actions": [
+    {
+      "id": "move",
+      "label": "Move",
+      "kind": "stick",
+      "keys": ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"],
+      "pad": ["stick:left", "dpad"]
+    }
+  ],
+  "players": []
+}

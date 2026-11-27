@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "id": "open-a-window",
+  "name": "Open a window",
+  "size": [320, 180],
+  "languages": ["en"],
+  "start": "play",
+  "content": [],
+  "assets": []
+}

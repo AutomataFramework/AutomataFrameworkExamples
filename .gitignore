@@ -1,3 +1,6 @@
 node_modules/
 # The starter game the harness makes from create-automata at build time.
 examples/starter/
+# What the harness writes next to each small example (examples/<group>/<name>/) and builds into examples/<group>-<name>/.
+examples/*/*/index.html
+examples/*-*/
