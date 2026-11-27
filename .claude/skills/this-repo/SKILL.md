@@ -44,7 +44,16 @@ description: Use when working in AutomataFrameworkExamples: its layout, its CI, 
 - A story file (`.json`, `.md`) counts as content only under a content-named folder (`content`, `story`, `assets`,
   ...) or wherever a `CONTENT-LICENSE.md` covers it. A future `examples/<name>/` that holds story text puts it in
   such a folder.
-- GPU work (from the slice 0 GPU pull request): RunPod pods named `ax-ci-*`, started by a job on GitHub's runners
-  for same-repo pull requests and `main` only. The Editors repo's pods are `ae-ci-*`; never touch them, nor any pod
-  without our prefix. Both repos share one org GitHub App: variable `AUTOMATA_CI_APP_ID`, secret
-  `AUTOMATA_CI_APP_KEY`.
+- GPU work (`.github/workflows/gpu.yml`, `fork-guard.yml`, `scripts/gpu/`, `ci/gpu-image/`): RunPod pods named `ax-ci-*`,
+  started by jobs on GitHub's runners with scripts from the trusted base (never from the change), for same-repo pull
+  requests, the merge queue and `main` only. Only `gpu-smoke` runs on the pod, with no secret. The Editors repo's pods
+  are `ae-ci-*`, and the owner has an unrelated `ruken-runner` pod: never touch any pod without our `ax-ci-` prefix.
+- Examples has its own GitHub App: variable `EXAMPLES_CI_APP_ID`, secret `EXAMPLES_CI_APP_KEY` (administration and
+  variables write, installed on this repo only). Not shared with Editors.
+- Spend: the RunPod key cannot read billing, so a ledger of one variable per pod (`AX_CI_LEDGER_*`) folded into a
+  monthly total (`AX_CI_SPENT_YYYY_MM`) counts only our pods. Cap $25 a month, at most 3 pods at once.
+- A fork's pull request starts no pod and reads no secret: `fork-guard.yml` (on `pull_request_target`, so the base
+  branch's copy runs) drafts it and fails it, and `gpu` fails for it. A fork's change reaches a pod only after a
+  maintainer pushes it to a branch of this repo.
+- Never queue a pull request that has two checks of the same name. `gpu` must not be cancelled: a cancelled `gpu`
+  fails the aggregate by design.

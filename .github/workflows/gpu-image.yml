@@ -1,0 +1,48 @@
+# Builds the pod image in ci/gpu-image and pushes it to ghcr.io/automataframework/ci-gpu. It runs on a push to main that
+# changes that folder, on the 1st of each month (so the runner never goes stale), and by hand. The digest it prints in
+# the run summary is what `gpu.yml` pins. Plain docker commands, no third-party action, and no secret but the run's token.
+name: gpu-image
+
+on:
+  push:
+    branches: [main]
+    paths: ['ci/gpu-image/**']
+  schedule:
+    - cron: '17 4 1 * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: gpu-image
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build and push
+        env:
+          TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          IMAGE=ghcr.io/automataframework/ci-gpu
+          TAG="$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
+          echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          docker build -t "$IMAGE:$TAG" ci/gpu-image
+          docker push "$IMAGE:$TAG"
+          DIGEST="$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$TAG")"
+          {
+            echo "## Pod image"
+            echo
+            echo "Pin this in gpu.yml (GPU_IMAGE, in two places):"
+            echo
+            echo '```'
+            echo "$DIGEST"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

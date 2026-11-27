@@ -1,0 +1,277 @@
+# The GPU check: one job on a RunPod GPU pod draws with WebGL on a real NVIDIA card, for a pull request from a branch of
+# this repo, its merge-queue run, and every push to main. A fork's pull request starts no pod and reads no secret
+# (the Owner's rule, 2026-11-27: no fork code on a pod, in any event); `fork-guard.yml` is the layer a fork cannot edit.
+#
+# Everything that starts or stops a pod runs on GitHub's free runners, with scripts from the trusted base (the pull
+# request's base commit, the queue's base, or the pushed commit), never from the change. Only `gpu-smoke` runs on the
+# pod, and it has no secret. Every job has a timeout. The pod deletes itself as the last line.
+# See docs/superpowers/specs and `this-repo` for how a fork's change reaches a branch here.
+name: gpu
+
+on:
+  pull_request:
+    # No `edited`: a new title or description starts no pod.
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  merge_group:
+    types: [checks_requested]
+  schedule:
+    # The sweep only. GitHub delays and sometimes drops these, so it is a second line; the pod's self-delete is the real one.
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A newer push to a pull request stops the run it replaces; main, the queue and the sweep are never cancelled.
+  group: gpu-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  plan:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      apply: ${{ steps.plan.outputs.apply }}
+      fork: ${{ steps.plan.outputs.fork }}
+      passes: ${{ steps.plan.outputs.passes }}
+      why: ${{ steps.plan.outputs.why }}
+      preflight: ${{ steps.plan.outputs.preflight }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - id: plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/gpu/cli/plan.ts
+
+  pod-start:
+    needs: plan
+    if: needs.plan.outputs.apply == 'true' && needs.plan.outputs.fork != 'true' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    env:
+      # The pod image, pinned by digest. The image workflow writes the new digest to its summary and a session bumps it here.
+      GPU_IMAGE: ghcr.io/automataframework/ci-gpu@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    outputs:
+      # Only these two, neither of them secret.
+      pod: ${{ steps.create.outputs.pod }}
+      label: ${{ steps.label.outputs.label }}
+    steps:
+      - name: The scripts, from the trusted base only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - name: Sweep old pods, settle the ledger, refuse at the cap or at 3 pods
+        env:
+          APP_ID: ${{ vars.EXAMPLES_CI_APP_ID }}
+          APP_KEY: ${{ secrets.EXAMPLES_CI_APP_KEY }}
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        run: node scripts/gpu/cli/guard.ts
+      - name: The label every pod of this attempt is named with
+        id: label
+        run: node scripts/gpu/cli/label.ts
+      - name: The runner's one-job config, masked at once
+        env:
+          APP_ID: ${{ vars.EXAMPLES_CI_APP_ID }}
+          APP_KEY: ${{ secrets.EXAMPLES_CI_APP_KEY }}
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          LABEL: ${{ steps.label.outputs.label }}
+        run: node scripts/gpu/cli/jit.ts
+      - name: The pod
+        id: create
+        env:
+          APP_ID: ${{ vars.EXAMPLES_CI_APP_ID }}
+          APP_KEY: ${{ secrets.EXAMPLES_CI_APP_KEY }}
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          LABEL: ${{ steps.label.outputs.label }}
+        run: node scripts/gpu/cli/create.ts
+      - name: Wait for the runner to come online
+        env:
+          APP_ID: ${{ vars.EXAMPLES_CI_APP_ID }}
+          APP_KEY: ${{ secrets.EXAMPLES_CI_APP_KEY }}
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          LABEL: ${{ steps.label.outputs.label }}
+          POD_ID: ${{ steps.create.outputs.pod }}
+        run: node scripts/gpu/cli/wait.ts
+
+  gpu-smoke:
+    needs: [plan, pod-start]
+    if: needs.plan.outputs.apply == 'true' && needs.plan.outputs.fork != 'true' && github.event_name != 'workflow_dispatch'
+    runs-on: [self-hosted, '${{ needs.pod-start.outputs.label }}']
+    timeout-minutes: 15
+    permissions: {}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The GPU, the key's scope, and the environment's names
+        run: |
+          nvidia-smi -L
+          cat /opt/ax/key-scope.txt
+          echo "Runner version: $(cat /opt/actions-runner/.runner-version 2>/dev/null || /opt/actions-runner/bin/Runner.Listener --version)"
+      - name: Draw with WebGL on the GPU
+        run: node scripts/gpu/smoke/render.ts "$RUNNER_TEMP/gpu-smoke.webp"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gpu-smoke-picture
+          path: ${{ runner.temp }}/gpu-smoke.webp
+          retention-days: 3
+          if-no-files-found: error
+
+  watch:
+    needs: [plan, pod-start]
+    if: needs.plan.outputs.apply == 'true' && needs.plan.outputs.fork != 'true' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - run: node scripts/gpu/cli/watch.ts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  pod-stop:
+    needs: [plan, pod-start, gpu-smoke, watch]
+    if: always() && needs.plan.outputs.apply == 'true' && needs.plan.outputs.fork != 'true' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - name: Every pod of this run attempt, found by name
+        env:
+          APP_ID: ${{ vars.EXAMPLES_CI_APP_ID }}
+          APP_KEY: ${{ secrets.EXAMPLES_CI_APP_KEY }}
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        run: node scripts/gpu/cli/stop.ts
+
+  ledger:
+    # The only writer of the month's total, one at a time and never cancelled (Y4-2).
+    needs: [pod-stop, sweep]
+    if: always() && (needs.pod-stop.result != 'skipped' || github.event_name == 'schedule')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: ax-ci-ledger
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - env:
+          APP_ID: ${{ vars.EXAMPLES_CI_APP_ID }}
+          APP_KEY: ${{ secrets.EXAMPLES_CI_APP_KEY }}
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        run: node scripts/gpu/cli/ledger.ts
+
+  sweep:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - env:
+          APP_ID: ${{ vars.EXAMPLES_CI_APP_ID }}
+          APP_KEY: ${{ secrets.EXAMPLES_CI_APP_KEY }}
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+        run: node scripts/gpu/cli/sweep.ts
+
+  preflight:
+    # On a dispatch, and on a push to main that changes this file or `scripts/gpu/`.
+    needs: plan
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.plan.outputs.preflight == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GPU_IMAGE: ghcr.io/automataframework/ci-gpu@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - env:
+          APP_ID: ${{ vars.EXAMPLES_CI_APP_ID }}
+          APP_KEY: ${{ secrets.EXAMPLES_CI_APP_KEY }}
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/gpu/cli/preflight.ts
+
+  # The required check. It passes only when every job that applies ended `success`; a cancelled job, or one skipped
+  # because something before it failed, fails it, so a run that `watch` cancels cannot pass.
+  gpu:
+    needs: [plan, pod-start, gpu-smoke, watch, pod-stop]
+    if: always() && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - name: Every job that applies passed
+        env:
+          APPLY: ${{ needs.plan.outputs.apply }}
+          FORK: ${{ needs.plan.outputs.fork }}
+          PASSES: ${{ needs.plan.outputs.passes }}
+          WHY: ${{ needs.plan.outputs.why }}
+          R_PLAN: ${{ needs.plan.result }}
+          R_POD_START: ${{ needs.pod-start.result }}
+          R_GPU_SMOKE: ${{ needs.gpu-smoke.result }}
+          R_WATCH: ${{ needs.watch.result }}
+          R_POD_STOP: ${{ needs.pod-stop.result }}
+        run: node scripts/gpu/cli/aggregate.ts
