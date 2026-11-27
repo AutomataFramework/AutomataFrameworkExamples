@@ -1,0 +1,17 @@
+# Throwaway probe, deleted before the pull request is ready.
+name: billing-probe
+on:
+  push:
+    branches: [claude/project-thread-u5i846]
+permissions: {}
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          K: ${{ secrets.RUNPOD_API_KEY }}
+        run: |
+          for p in v2/pods v2/billing/pods v2/billing v2/gpu-types v2/gputypes v2/gpus v2/user v2/me v1/pods v1/billing/pods v1/billing/pods?grouping=podId v1/gpu-types; do
+            echo "== GET /$p"; curl -sS -m 30 -w '\nHTTP %{http_code}\n' -H "Authorization: Bearer $K" "https://api.runpod.io/$p" | head -c 700
+          done
