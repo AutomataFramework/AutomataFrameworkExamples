@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test'
 import { reserve, priced, spent, entries, fold } from '../../scripts/gpu/budget.ts'
-import { CAP_USD, GPU_ORDER, ONLINE_WAIT_MS, WATCH_GRACE_MS } from '../../scripts/gpu/config.ts'
+import { CAP_USD, GPU_ORDER, ONLINE_WAIT_MS, SWEEP_AGE_MIN, WATCH_GRACE_MS } from '../../scripts/gpu/config.ts'
 import { ensureOnline, guard, makePod, podAgeMs, stopRun, sweepAll, watchRun, watchState } from '../../scripts/gpu/gate.ts'
 import { makeLabel, replacementName } from '../../scripts/gpu/names.ts'
 import { render, summaryLines } from '../../scripts/gpu/summary.ts'
@@ -25,6 +25,13 @@ describe('making a pod', () => {
     expect(body.env.NVIDIA_DRIVER_CAPABILITIES).toBe('all')
     expect(body.env.AX_RUN_ID).toBe('100')
     expect(body.name).toBe(label)
+  })
+  test('the pod is told to delete itself after 13 idle minutes and 35 minutes on a job', async () => {
+    const { d, w } = deps()
+    const label = labelAt(w.clock)
+    await makePod(d, { podName: label, label, jit: 'j', runId: '100' })
+    expect(w.created[0].body.env.AX_IDLE_LIMIT_MIN).toBe('13')
+    expect(w.created[0].body.env.AX_JOB_LIMIT_MIN).toBe('35')
   })
   test('a card with no stock falls to the next, and the summary says so (a forced fall-back)', async () => {
     const { d, w, retries, events } = deps()
@@ -98,7 +105,7 @@ describe('the guard at the start of pod-start', () => {
     const { d, w } = deps()
     await reserve(d.vars, labelAt(w.clock), w.clock - 100 * MIN)
     await priced(d.vars, labelAt(w.clock), 'p', 1)
-    // The entry has no pod listed, so it is closed at once; 35 minutes at $1 an hour is the most it can have cost.
+    // The entry has no pod listed, so it is closed at once; the sweep age at $1 an hour is the most it can have cost.
     expect((await guard(d)).verdict.allowed).toBe(true)
     await fold(d.vars, w.clock)
     await d.vars.set('AX_CI_SPENT_2026_11', JSON.stringify({ usd: CAP_USD - 0.01, folded: [] }))
@@ -106,10 +113,10 @@ describe('the guard at the start of pod-start', () => {
     await d.vars.set('AX_CI_SPENT_2026_11', JSON.stringify({ usd: CAP_USD, folded: [] }))
     expect((await guard(d)).verdict.allowed).toBe(false)
   })
-  test('sweeps ax-ci pods older than 35 minutes and nothing else', async () => {
+  test('sweeps ax-ci pods older than the sweep age and nothing else', async () => {
     const { d, w } = deps()
-    const old = w.clock - 36 * MIN
-    const young = w.clock - 34 * MIN
+    const old = w.clock - (SWEEP_AGE_MIN + 1) * MIN
+    const young = w.clock - (SWEEP_AGE_MIN - 1) * MIN
     w.pods.push({ id: 'old', name: labelAt(old, '1'), cost: 1, createdAt: new Date(old).toISOString(), gpu: 'x' })
     w.pods.push({ id: 'young', name: labelAt(young, '2'), cost: 1, createdAt: new Date(young).toISOString(), gpu: 'x' })
     w.pods.push({ id: 'ae', name: 'ae-ci-1-1-abcdefgh', cost: 1, createdAt: new Date(old).toISOString(), gpu: 'x' })
@@ -211,10 +218,10 @@ describe('pod-stop', () => {
 describe('the sweep', () => {
   test('removes old ax-ci pods, closes entries of vanished pods, touches no other name', async () => {
     const { d, w } = deps()
-    const old = labelAt(w.clock - 40 * MIN, '1')
-    await reserve(d.vars, old, w.clock - 40 * MIN)
+    const old = labelAt(w.clock - (SWEEP_AGE_MIN + 5) * MIN, '1')
+    await reserve(d.vars, old, w.clock - (SWEEP_AGE_MIN + 5) * MIN)
     await priced(d.vars, old, 'o1', 1)
-    w.pods.push({ id: 'o1', name: old, cost: 1, createdAt: new Date(w.clock - 40 * MIN).toISOString(), gpu: 'x' })
+    w.pods.push({ id: 'o1', name: old, cost: 1, createdAt: new Date(w.clock - (SWEEP_AGE_MIN + 5) * MIN).toISOString(), gpu: 'x' })
     w.pods.push({ id: 'ae', name: 'ae-ci-1-1-xxxxxxxx', cost: 1, createdAt: new Date(w.clock - 99 * MIN).toISOString(), gpu: 'x' })
     const gone = labelAt(w.clock - 10 * MIN, '2')
     await reserve(d.vars, gone, w.clock - 10 * MIN)
@@ -223,7 +230,8 @@ describe('the sweep', () => {
     expect(r.removed).toEqual([old])
     expect(r.closed).toEqual([gone])
     expect(w.pods.map((p) => p.id)).toEqual(['ae'])
-    expect((await spent(d.vars, w.clock)) < 1).toBe(true)
+    // The old pod counts for no more than the sweep age (the cap on one pod's life), the vanished one for its 10 minutes.
+    expect((await spent(d.vars, w.clock)) <= (SWEEP_AGE_MIN + 10) / 60 + 1e-9).toBe(true)
   })
 })
 

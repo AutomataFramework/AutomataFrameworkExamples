@@ -26,8 +26,11 @@ export const ONLINE_WAIT_MS = 5 * 60 * 1000
 /** `watch` cancels a run whose `gpu-smoke` has not started this long after the runner came online. */
 export const WATCH_GRACE_MS = 3 * 60 * 1000
 
-/** The sweep deletes `ax-ci-*` pods older than this: the three timeouts (12 + 15 + 5 minutes) plus 3. */
-export const SWEEP_AGE_MIN = 35
+/** The most the pod's one job, `gpu-smoke`, may run (its `timeout-minutes`). It was 15 until the harness needed longer. */
+export const SMOKE_TIMEOUT_MIN = 30
+
+/** The sweep deletes `ax-ci-*` pods older than this: the three timeouts (12 + 30 + 5 minutes) plus 3. */
+export const SWEEP_AGE_MIN = 50
 
 /** At most this many `ax-ci-*` pods run at once; a fourth start is refused. */
 export const MAX_RUNNING = 3
@@ -44,8 +47,8 @@ export const FALLBACK_COST_PER_HR = 3
 /** A pod that never gets a job deletes itself after this long (the online wait twice, plus the watch grace). */
 export const IDLE_LIMIT_MIN = 13
 
-/** A pod deletes itself this long after its runner took its job, which is past `gpu-smoke`'s own 15 minutes. */
-export const JOB_LIMIT_MIN = 20
+/** A pod deletes itself this long after its runner took its job, which is past `gpu-smoke`'s own 30 minutes. */
+export const JOB_LIMIT_MIN = 35
 
 /** The one job a pod's runner may take. */
 export const ALLOWED_JOB = 'gpu-smoke'

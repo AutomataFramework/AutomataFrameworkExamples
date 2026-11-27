@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test'
 import { cancel, close, costOf, entries, fold, priced, reconcile, reserve, spent, verdict } from '../../scripts/gpu/budget.ts'
-import { CAP_USD, MAX_RUNNING } from '../../scripts/gpu/config.ts'
+import { CAP_USD, MAX_RUNNING, SWEEP_AGE_MIN } from '../../scripts/gpu/config.ts'
 import { ledgerVar, makeLabel, spentVar } from '../../scripts/gpu/names.ts'
 import { expect } from '../expect.ts'
 import { memoryVars } from './fakes.ts'
@@ -41,7 +41,7 @@ describe('the ledger', () => {
     expect(Math.abs((await spent(vars, T0 + 30 * MIN)) - 1.5) < 1e-9).toBe(true)
   })
   test('no pod is counted past the sweep age, whatever the entry says', () => {
-    expect(costOf({ label: 'a', costPerHr: 6, start: 0 }, 10 * 60 * MIN)).toBe(6 * (35 / 60))
+    expect(costOf({ label: 'a', costPerHr: 6, start: 0 }, 10 * 60 * MIN)).toBe(6 * (SWEEP_AGE_MIN / 60))
   })
   test('a create that failed owes nothing', async () => {
     const vars = memoryVars()
