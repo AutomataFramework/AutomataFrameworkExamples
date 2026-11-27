@@ -1,0 +1,19 @@
+# Throwaway: measures RunPod's billing endpoint from a GitHub runner. Deleted before the pull request is ready.
+name: billing-probe
+on:
+  push:
+    branches: [claude/project-thread-u5i846]
+permissions: {}
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          K: ${{ secrets.RUNPOD_API_KEY }}
+        run: |
+          [ -n "$K" ] || { echo "RUNPOD_API_KEY is not set on this repo"; exit 1; }
+          for u in "pods" "billing/pods" "billing/pods?grouping=podId&bucketSize=month" "billing/pods?bucketSize=day"; do
+            echo "== GET /v1/$u"
+            curl -s -m 30 -w '\nHTTP %{http_code}\n' -H "Authorization: Bearer $K" "https://rest.runpod.io/v1/$u" | head -c 3000
+          done
