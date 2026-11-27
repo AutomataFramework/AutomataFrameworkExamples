@@ -37,7 +37,7 @@ describe('gpu.yml', () => {
     ['watch with more permission', '      actions: write\n', '      actions: write\n      contents: write\n', 'watch has permissions other than'],
     ['a secret in plan', '          GITHUB_TOKEN: ${{ github.token }}\n        run: node scripts/gpu/cli/plan.ts', '          K: ${{ secrets.RUNPOD_API_KEY }}\n        run: node scripts/gpu/cli/plan.ts', 'plan reads a secret'],
     ['an unpinned action', 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0', 'actions/setup-node@v7', 'not pinned to a commit'],
-    ['an image not pinned by digest', /ci-gpu@sha256:0{64}/, 'ci-gpu:latest', 'does not pin the image by digest'],
+    ['an image not pinned by digest', /ci-gpu@sha256:[0-9a-f]{64}/, 'ci-gpu:latest', 'does not pin the image by digest'],
     ['a ledger that can be cancelled', 'cancel-in-progress: false\n    permissions', 'cancel-in-progress: true\n    permissions', 'never cancelled'],
     ['cancel-in-progress for main', "cancel-in-progress: ${{ github.event_name == 'pull_request' }}", 'cancel-in-progress: true', 'cancel-in-progress is not limited'],
     ['an environment name the smoke refuses', '        run: node scripts/gpu/smoke/render.ts "$RUNNER_TEMP/gpu-smoke.webp"\n', '        run: node scripts/gpu/smoke/render.ts\n        env:\n          AX_SMOKE_OUT: x\n', 'gpu-smoke sets AX_SMOKE_OUT'],
