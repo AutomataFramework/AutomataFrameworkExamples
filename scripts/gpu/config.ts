@@ -92,3 +92,8 @@ export const ENV_PREFIXES: readonly string[] = ['GITHUB_', 'INPUT_', 'RUNNER_', 
 
 /** Names that fail `gpu-smoke` whatever else is true: they would reach beyond this one job. */
 export const ENV_FORBIDDEN_PREFIXES: readonly string[] = ['RUNPOD_', 'JIT_']
+
+/** A card id RunPod accepts is an NVIDIA name as the catalog writes it (measured: "NVIDIA GeForce RTX 4090"). */
+export function isGpuName(name: string): boolean {
+  return /^NVIDIA [A-Za-z0-9 ]+$/.test(name)
+}

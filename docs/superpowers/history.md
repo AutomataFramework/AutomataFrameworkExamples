@@ -36,10 +36,23 @@ pull request #1. The setup check in `release`, item by item:
   setup branch (it mixes rules and CI with scripts and tests); the first pull request after #1 turns it off.
 - **`verify`:** missing. It is the kit's template; there is nothing to start until slice 1a.
 
+## GPU runners (slice 0)
+
+2026-11-27, measured from a GitHub runner (the RunPod key has pods read and write only): `/v1/billing/pods` and the GPU
+catalog both refuse it (billing:read and catalog:read missing). So spend is a ledger of our own pods, cap $25 a month
+for Examples and $25 for Editors (the Owner's $50 slice 0 cap, split), not RunPod's bill. A probe that listed all pods
+put another pod's details in public Actions logs; those logs were deleted the same day and the probe removed.
+Decisions: Examples has its own GitHub App (`EXAMPLES_CI_APP_ID`/`KEY`), a ledger variable per pod folded into a
+monthly total (a close adds its cost to the total before its variable is removed, so a cancelled run counts a pod once),
+and `ruleMix.firstTimeSetup` is turned off in the pull request after the GPU one, not in it.
+
 ## Standing permissions
 
 - 2026-11-27, the Owner (the approved roadmap, slice 0): first-time setup of this repo's rules and CI (lane 2), and
   RunPod CI for this repo within the $50 a month cap until slice 0's cost card sets it.
+- 2026-11-27 04:32 UTC, the Owner (decision card cmsg_015qSNRrgZWSCwn9M1iFmFZJ9QujpQkXKX9q1L2Vb1usdd): sessions may merge any pull
+  request in Framework, Examples, Editors and Site, lane 3 included, once its required reviews pass and CI is green;
+  report after. Fork code never runs on a pod, even after queueing.
 
 ## Approved screens
 

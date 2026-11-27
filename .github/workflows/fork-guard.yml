@@ -1,0 +1,49 @@
+# The layer a fork cannot edit. On `pull_request_target` GitHub runs this file as it is on main, so a fork's own copy of
+# `gpu.yml` (or of this file) changes nothing. For a fork's pull request it turns the pull request into a draft, which
+# cannot be added to the merge queue, comments the copy steps once, and fails. The block does not depend on any check's
+# name: a fork that adds its own passing job called `fork-guard` still cannot be queued. It checks out nothing and runs
+# nothing from the change; it reads one field of the event. Its only permission is `pull-requests: write`.
+name: fork-guard
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+  merge_group:
+    types: [checks_requested]
+
+permissions: {}
+
+concurrency:
+  group: fork-guard-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  fork-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    env:
+      # true only for a fork's pull request; the merge-queue run always passes (a fork cannot reach the queue as a draft).
+      FORK: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository }}
+    steps:
+      - name: Not a fork's pull request
+        if: env.FORK != 'true'
+        run: echo "This is not a fork's pull request."
+      - name: A fork's pull request becomes a draft, gets the copy steps once, and fails
+        if: env.FORK == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # A draft cannot be added to the merge queue. Marking it ready again runs this again.
+          gh pr ready --undo "$PR" --repo "$REPO" || true
+          marker='<!-- fork-guard -->'
+          if ! gh pr view "$PR" --repo "$REPO" --json comments --jq '.comments[].body' | grep -qF "$marker"; then
+            gh pr comment "$PR" --repo "$REPO" --body "$marker
+          This pull request is from a fork, so the GPU check never runs on it. A maintainer reads the whole diff first. If it touches \`.github/\`, \`scripts/gpu/\` or \`ci/gpu-image/\`, ask the Owner before copying. Then copy it to a branch here (\`gh pr checkout <n> && git push origin HEAD:fork-<n>\`) and open a pull request from that branch."
+          fi
+          echo "::error::This pull request is from a fork, so the GPU check never runs on it. A maintainer copies it to a branch here after reading the whole diff."
+          exit 1
