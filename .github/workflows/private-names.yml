@@ -3,8 +3,12 @@
 #
 # Safety: the script always comes from the base commit, never from the change: `main` for a pull request (which runs
 # on `pull_request_target`, so this file comes from `main` too) and the queue's base for a merge-queue run. The
-# change's files are checked out as data into `pr/` and nothing in them is run. The token can only read. For a fork's
-# pull request the script says only that a name was found, never where, since the log is public.
+# change's files are checked out as data into `pr/` and nothing in them is run. The token can only read.
+#
+# A fork's pull request is not checked here: `pull_request_target` runs start for forks whatever the approval
+# settings, so pass or fail would let a fork test guesses against the list, a few runs per name. Its run passes with a
+# notice and never touches the secret. The check that counts for a fork is the merge-queue run, which only a maintainer
+# can start, and which looks at the queued change's files and commit messages.
 #
 # One limit: in a merge-queue run GitHub takes this workflow file from the queue's merge commit, so an edit to this
 # file is trusted only once it has passed its review and been queued by a maintainer. A change to this file or the
@@ -30,33 +34,43 @@ jobs:
   private-names:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      # true only for a fork's pull request; every other step is skipped then, so nothing reads the secret.
+      FORK: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository }}
     steps:
+      - name: A fork's pull request is checked in the merge queue
+        if: env.FORK == 'true'
+        run: echo "::notice::This pull request is from a fork, so private names are checked when a maintainer queues it."
       - name: The checker, from main
+        if: env.FORK != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
           path: trusted
           persist-credentials: false
       - name: What is being checked, as data only
+        if: env.FORK != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: pr
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - if: env.FORK != 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.21.0
       - name: The secret is read and a planted name is found
+        if: env.FORK != 'true'
         env:
           PRIVATE_NAMES: ${{ secrets.PRIVATE_NAMES }}
         run: node trusted/scripts/check-private-names.ts --self-test
       - name: No private name in the change
+        if: env.FORK != 'true'
         env:
           PRIVATE_NAMES: ${{ secrets.PRIVATE_NAMES }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
-          FROM_FORK: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository }}
-          RANGE: ${{ github.event_name == 'pull_request_target' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || (github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && format('{0}..{1}', github.event.before, github.sha)) || '' }}
+          RANGE: ${{ github.event_name == 'pull_request_target' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || github.event_name == 'merge_group' && format('{0}..{1}', github.event.merge_group.base_sha, github.event.merge_group.head_sha) || (github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && format('{0}..{1}', github.event.before, github.sha)) || '' }}
         run: node trusted/scripts/check-private-names.ts pr "$RANGE"

@@ -34,11 +34,13 @@ description: Use when working in AutomataFrameworkExamples: its layout, its CI, 
   edit to that file is trusted only after its review, when a maintainer queues it. A change to the script takes effect
   after it merges. Its self-test plants the first secret name in a throwaway repo (file, prompt, commit message,
   description, branch) and fails unless all are found, so a green run proves the secret is read without showing it.
-- Known limit: `pull_request_target` runs start for a fork's pull request whatever the fork-approval setting, so a
-  fork can always run this check. For a fork, the check says only that a name was found, never where, so one run
-  answers one yes-or-no question about everything the fork sent, not which guess matched.
-- The fork-PR approval policy (the Owner's batch) holds every other workflow of a fork's pull request until the Owner
-  approves it.
+- A fork's pull request is not checked for private names on the pull request: `pull_request_target` runs start for
+  forks whatever the approval settings, so pass or fail would let a fork search the list a few runs per name. Its
+  `private-names` run passes with a notice and no step reads the secret (`tests/workflows/private-names.test.ts`
+  checks this). The check that counts is the merge-queue run, which only a maintainer starts; it checks the queued
+  files and commit messages, and its log names the file and line, which is fine since a maintainer chose to queue it.
+- The fork-PR approval policy (the Owner's batch) holds the `pull_request` workflows of a fork's pull request until
+  the Owner approves them; it does not hold `pull_request_target` runs.
 - A story file (`.json`, `.md`) counts as content only under a content-named folder (`content`, `story`, `assets`,
   ...) or wherever a `CONTENT-LICENSE.md` covers it. A future `examples/<name>/` that holds story text puts it in
   such a folder.

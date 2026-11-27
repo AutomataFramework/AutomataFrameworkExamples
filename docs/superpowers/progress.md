@@ -12,6 +12,7 @@ Last updated: 2026-11-27 03:51 UTC (from `date`).
 
 ### Remaining
 
+- Turn off `ruleMix.firstTimeSetup` in `.claude/hooks/rules.json`: the first pull request after #1 (the GPU spec's).
 - RunPod GPU runners that a fork's pull request cannot start and that never see a secret, and one measured GPU run.
 - A pull request from a real fork that runs no RunPod job and sees no secret.
 - The Owner runs `setup/examples-slice0.sh` (fork approval, the `main` ruleset with `gate` and `private-names`, the

@@ -32,7 +32,8 @@ pull request #1. The setup check in `release`, item by item:
 - **Compaction hook:** added (`.claude/settings.json` `SessionStart` with matcher `compact` prints
   `.claude/after-compaction.md`).
 - **Rule hooks:** added; `node .claude/hooks/rules.mjs --check` reports no blanks and `mergeGreen on` (required
-  statuses `gate` and `private-names`). `ruleMix.firstTimeSetup` is turned off in this pull request's last commit.
+  statuses `gate` and `private-names`). `ruleMix.firstTimeSetup` stays on in #1, because with it off the hook refuses every further commit of this
+  setup branch (it mixes rules and CI with scripts and tests); the first pull request after #1 turns it off.
 - **`verify`:** missing. It is the kit's template; there is nothing to start until slice 1a.
 
 ## Standing permissions
