@@ -29,8 +29,8 @@ describe('GitHub', () => {
       return fetchFn(url, init)
     }
     await installationCaller(wrapped, '1', privateKey, 'AutomataFramework/AutomataFrameworkExamples', Date.now())
-    expect(asked[0]).toEqual({ repositories: ['AutomataFrameworkExamples'], permissions: { administration: 'write', variables: 'write' } })
-    expect(APP_PERMISSIONS).toEqual({ administration: 'write', variables: 'write' })
+    expect(asked[0]).toEqual({ repositories: ['AutomataFrameworkExamples'], permissions: { administration: 'write', actions_variables: 'write' } })
+    expect(APP_PERMISSIONS).toEqual({ administration: 'write', actions_variables: 'write' })
     void w
   })
   test('a runner config asks for one custom label and is refused if GitHub adds another', async () => {

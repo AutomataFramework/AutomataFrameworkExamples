@@ -6,7 +6,7 @@ export const GITHUB = 'https://api.github.com'
 const HEADERS = { 'x-github-api-version': '2022-11-28' }
 
 /** What the gate asks of the App: runners (administration) and, for the ledger, repository variables. Nothing else. */
-export const APP_PERMISSIONS = { administration: 'write', variables: 'write' } as const
+export const APP_PERMISSIONS = { administration: 'write', actions_variables: 'write' } as const
 
 const b64url = (b: Buffer | string): string => Buffer.from(b).toString('base64url')
 
