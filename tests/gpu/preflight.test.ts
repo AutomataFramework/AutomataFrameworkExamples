@@ -53,8 +53,8 @@ describe('preflight', () => {
   test('fails naming the call when RunPod refuses the key (a stand-in key)', async () => {
     const { p } = setup({ rp: caller(async () => ({ status: 403, text: async () => '{"detail":"this API key does not grant pods:read"}' }), 'https://api.runpod.io', () => 'x', new Map(), {}, async () => {}) })
     const failed = (await preflight(p)).filter((r) => !r.ok)
-    expect(failed).toHaveLength(1)
-    expect(failed[0].name).toBe('RunPod: GET /v2/pods')
+    // The leftover check reads the same pod list, so it fails with it.
+    expect(failed.map((f) => f.name)).toEqual(['RunPod: GET /v2/pods', 'No leftover pod'])
     expect(failed[0].detail).toContain('403')
   })
   test('fails naming the call when the App cannot write variables', async () => {
@@ -72,14 +72,28 @@ describe('preflight', () => {
     p.gh = async (m, path, b) => (path.includes('AutomataFrameworkEditors') ? { status: 200, body: {} as never } : base(m, path, b))
     expect((await preflight(p)).filter((r) => !r.ok).map((f) => f.name)).toEqual(['GitHub: the App cannot read Editors'])
   })
-  test('warns (fails) when the sweep has not run for more than 2 hours, or never', async () => {
+  test('only warns when the scheduled sweep is older than 2 hours or never ran, with no first-run grace', async () => {
     const { p } = setup()
-    expect((await preflight({ ...p, lastSweep: p.now - 3 * 3_600_000 })).filter((r) => !r.ok)[0].name).toBe('Sweep ran lately')
-    expect((await preflight({ ...p, lastSweep: null })).filter((r) => !r.ok)[0].detail).toContain('never run')
-    // a schedule GitHub has not yet started is given a day
-    expect((await preflight({ ...p, lastSweep: null, workflowCreated: p.now - 3 * 3_600_000 })).filter((r) => !r.ok)).toEqual([])
-    expect((await preflight({ ...p, lastSweep: null, workflowCreated: p.now - 30 * 3_600_000 })).filter((r) => !r.ok)[0].detail).toContain('never run')
-    expect((await preflight({ ...p, lastSweep: p.now - 1.9 * 3_600_000 })).filter((r) => !r.ok)).toEqual([])
+    const sweep = async (lastSweep: number | null) => (await preflight({ ...p, lastSweep })).find((r) => r.name === 'Sweep ran lately')!
+    for (const lastSweep of [p.now - 3 * 3_600_000, null]) {
+      const r = await sweep(lastSweep)
+      expect(r.ok).toBe(true)
+      expect(r.warning).toBe(true)
+    }
+    expect((await sweep(null)).detail).toContain('never started')
+    expect((await sweep(p.now - 1.9 * 3_600_000)).warning).toBe(undefined)
+  })
+  test('fails naming an ax-ci pod older than the sweep age plus one Editors cron, and only ax-ci pods', async () => {
+    const { p, w } = setup()
+    const at = (min: number) => new Date(p.now - min * 60_000).toISOString()
+    const pod = (name: string, min: number) => ({ id: name.replace(/-/g, ''), name, cost: 1, createdAt: at(min), gpu: 'x' })
+    w.pods.push(pod('ax-ci-1-1-k', 59), pod('ae-ci-2-1-k', 600), pod('ruken-runner', 6000))
+    expect((await preflight(p)).filter((r) => !r.ok)).toEqual([])
+    w.pods.push(pod('ax-ci-3-1-k', 61))
+    const failed = (await preflight(p)).filter((r) => !r.ok)
+    expect(failed.map((f) => f.name)).toEqual(['No leftover pod'])
+    expect(failed[0].detail).toContain('ax-ci-3-1-k')
+    expect(failed[0].detail.includes('ax-ci-1-1-k')).toBe(false)
   })
   test('fails when the image runner is more than 30 days behind the latest release', async () => {
     const { p } = setup()

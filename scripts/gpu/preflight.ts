@@ -1,10 +1,15 @@
 // `preflight`: calls every endpoint the gate uses, with the real keys, reading or making a thing and removing it at
 // once. It fails naming the refused call, so a key missing a permission shows up here and not in a pull request.
+import { SWEEP_AGE_MIN } from './config.ts'
+import { podAgeMs } from './gate.ts'
 import { makeJit } from './github.ts'
+import { isOurs } from './names.ts'
+import { allPods } from './runpod.ts'
 import type { Call, Fetch } from './http.ts'
 import type { Vars } from './budget.ts'
 
-export type Result = { name: string; ok: boolean; detail: string }
+/** A warning passes but is shown as one; only a failure stops the run. */
+export type Result = { name: string; ok: boolean; detail: string; warning?: boolean }
 
 /** GitHub supports a runner for about 30 days after a newer release; past that it is refused work. */
 export const RUNNER_WINDOW_DAYS = 30
@@ -18,10 +23,8 @@ export type Preflight = {
   fetchFn: Fetch
   image: string
   now: number
-  /** When the sweep last ran, or null when it never has. */
+  /** When the scheduled sweep last ran, or null when it never has. */
   lastSweep: number | null
-  /** When GitHub first saw `gpu.yml`, or null when unknown. GitHub can take hours to start a new schedule. */
-  workflowCreated?: number | null
 }
 
 async function step(name: string, run: () => Promise<string>): Promise<Result> {
@@ -36,8 +39,8 @@ function must(what: string, status: number, wanted: (s: number) => boolean = (s)
   if (!wanted(status)) throw new Error(`${what} answered ${status}`)
 }
 
-/** How long a new schedule is given to run its first sweep. */
-const SWEEP_FIRST_RUN_HOURS = 24
+/** A pod this old was missed by every sweep: Examples' age limit plus one 10-minute run of the Editors gate's cron. */
+export const LEFTOVER_MIN = SWEEP_AGE_MIN + 10
 
 export async function preflight(p: Preflight): Promise<Result[]> {
   const out: Result[] = []
@@ -81,16 +84,23 @@ export async function preflight(p: Preflight): Promise<Result[]> {
     }),
   )
   out.push(
-    await step('Sweep ran lately', async () => {
-      if (p.lastSweep === null) {
-        const age = p.workflowCreated == null ? Infinity : (p.now - p.workflowCreated) / 3_600_000
-        if (age <= SWEEP_FIRST_RUN_HOURS) return `the sweep has not run yet; the schedule is ${age.toFixed(1)} hours old and GitHub can take up to ${SWEEP_FIRST_RUN_HOURS} hours to start it`
-        throw new Error('the sweep has never run')
-      }
-      const hours = (p.now - p.lastSweep) / 3_600_000
-      if (hours > 2) throw new Error(`the sweep last ran ${hours.toFixed(1)} hours ago (GitHub may have turned schedules off)`)
-      return `the sweep ran ${hours.toFixed(1)} hours ago`
+    await step('No leftover pod', async () => {
+      const old = (await allPods(p.rp)).filter((x) => isOurs(x.name) && podAgeMs(x, p.now) > LEFTOVER_MIN * 60_000)
+      if (old.length) throw new Error(`pods older than ${LEFTOVER_MIN} minutes, missed by every sweep: ${old.map((x) => x.name).join(' ')}`)
+      return `no ax-ci pod older than ${LEFTOVER_MIN} minutes`
     }),
+  )
+  // GitHub's timer is a third line here (the pod's self-delete, then the Editors gate's cron), so a stale one only warns.
+  const hours = p.lastSweep === null ? null : (p.now - p.lastSweep) / 3_600_000
+  out.push(
+    hours !== null && hours <= 2
+      ? { name: 'Sweep ran lately', ok: true, detail: `the scheduled sweep ran ${hours.toFixed(1)} hours ago` }
+      : {
+          name: 'Sweep ran lately',
+          ok: true,
+          warning: true,
+          detail: hours === null ? "GitHub's timer has never started the scheduled sweep" : `the scheduled sweep last ran ${hours.toFixed(1)} hours ago`,
+        },
   )
   out.push(
     await step('Pod image: runner version', async () => {
