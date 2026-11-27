@@ -34,10 +34,14 @@ key, no new cost. This changes one line of both designs: Examples' "Editors uses
 
 ### Unit 1, Editors (`tools/ci/gate-worker/gate.ts`, its test, `this-repo`)
 
-- `sweep` also lists pods whose name starts `ax-ci-`. One older than **50 minutes** (Examples' `SWEEP_AGE_MIN`) is
+- `sweep` also lists pods whose name starts `ax-ci-`. **This Examples pass runs first, right after the pod list and
+  before the "no pod" early return and before the GitHub App token is asked for, and makes no GitHub call**, so it runs
+  when Editors has no pod of its own and when GitHub is down (plan audit R1). One older than **50 minutes** (Examples' `SWEEP_AGE_MIN`) is
   deleted with `DELETE /v2/pods/<id>`. Its age is read as Examples' own sweep reads it (`podAgeMs`): the time in its
   label (`ax-ci-<run>-<attempt>-<8 base-36 time chars><random>`), else RunPod's `createdAt`; a pod with neither is left
-  alone (Examples' own sweep deletes it).
+  alone (Examples' own sweep deletes it). The label parse accepts a replacement pod's `-2` suffix, as Examples'
+  `labelTime` does; the two copies of the label format (Editors cannot import Examples' `names.ts`) each carry a
+  comment naming the other, and an Examples test pins the label shape (`makeLabel` output parsed by `labelTime`).
 - It never touches the Editors ledger for an `ax-ci-` pod (Editors' `remove` books `stopped` in its own ledger, so these
   go through a plain delete). Examples' ledger closes the entry at its next `pod-start`, which already closes entries for
   pods found gone.
@@ -54,21 +58,30 @@ key, no new cost. This changes one line of both designs: Examples' "Editors uses
 - New failing step **"No leftover pod"**: reads the pod list with the Examples RunPod key and fails naming every
   `ax-ci-*` pod older than 60 minutes (the 50-minute sweep age plus one 10-minute cron). This checks the outcome the
   sweep exists for, whoever runs the sweep.
+- "No leftover pod" runs only with `preflight` (a `workflow_dispatch`, or a push to `main` that changes `gpu.yml` or
+  `scripts/gpu/`): it is a check at those moments, not a standing alarm. An `ax-ci-` pod with no label time and no
+  `createdAt` has no known age (`podAgeMs` gives Infinity) and fails it, which is right.
 - **"Sweep ran lately"** goes back to the design: no 24-hour first-run grace, and the design's word "warns": a
   scheduled sweep older than 2 hours, or none, is a `::warning::` annotation and a summary line, never a failure, since
   GitHub's timer is now a third line behind the pod's self-delete and the Editors cron. `workflowCreated` and
-  `SWEEP_FIRST_RUN_HOURS` are removed.
+  `SWEEP_FIRST_RUN_HOURS` are removed. A warning is a third result shape: `Result` gains `warning?: true` with
+  `ok: true`; the CLI prints `warning:` in the summary and a `::warning::` annotation, and exits 0 on warnings alone.
+- Examples' `this-repo` skill line saying Editors' pods are `ae-ci-*` and that no prefix but its own is touched gains:
+  the Editors gate's cron also deletes `ax-ci-` pods older than 50 minutes (named in the pull request).
 - `gpu.yml` keeps its `schedule` and its `sweep` job unchanged (harmless if it runs); no workflow file changes.
 
 ## Acceptance criteria
 
 1. Editors: a unit test with a stand-in pod list shows the sweep deletes an `ax-ci-` pod 51 minutes old (by
-   label time, and by `createdAt` when the name has no time), keeps one 49 minutes old, keeps `ruken-runner`, and
-   leaves the Editors ledger unchanged. Reverting the change fails it.
+   label time, by label time on a replacement `...-2` pod, and by `createdAt` when the name has no time), keeps one 49
+   minutes old, keeps `ruken-runner`, and leaves the Editors ledger unchanged. A second test has only an old `ax-ci-`
+   pod and `ruken-runner`, with every GitHub call failing: the `ax-ci-` pod is still deleted and `ruken-runner` kept.
+   Reverting the change fails both.
 2. Editors: `bun test`, `bun check`, `pnpm lint && pnpm fmt:check` pass; CI on the gate is green.
 3. Examples: a unit test shows "No leftover pod" fails naming a 61-minute `ax-ci-` pod and passes with a 59-minute one
    and with `ruken-runner`/`ae-ci-` pods of any age; "Sweep ran lately" is a warning (not a failure) at 3 hours and when
-   none ran, with no first-run grace. Reverting either change fails a test.
+   none ran, with no first-run grace, and `warning` is unset at 1.9 hours. A test pins the label shape both copies
+   parse. Reverting either change fails a test.
 4. Examples: `pnpm test` passes; `ci` and `gpu` are green.
 5. After the Editors merge deploys, the Worker's log or a manual `ax-ci-` check shows the cron sees Examples pods
    (read-only evidence: the cron's reply text, or the RunPod pod list with no `ax-ci-` pod older than 60 minutes).
