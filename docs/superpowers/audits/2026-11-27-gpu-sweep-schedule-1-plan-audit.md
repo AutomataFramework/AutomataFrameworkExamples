@@ -70,3 +70,56 @@ build pass its test while the Editors cron never deletes an Examples pod in the 
 - Whether the 14:07 UTC `schedule` slot ran after the 13:48 re-enable: the slot had not come at audit time, and the spec
   does not depend on it.
 - The Editors Worker's live cron replies (no log read); AC5 covers this after the deploy.
+
+---
+
+# Plan audit, round 2 (final): GPU sweep off GitHub's timer
+
+- Spec: `docs/superpowers/specs/2026-11-27-gpu-sweep-schedule-design.md` at **d43041e** (branch `claude/project-thread-q0rioz`, PR #14).
+  The spec only; d43041e also carries build commit 7c36079, which gets its own implementation audit.
+- Read against: round 1 above, Examples `main` (`scripts/gpu/names.ts`, `preflight.ts`, `gpu.yml` `preflight` job),
+  Editors `main` at 84c5ade (`tools/ci/gate-worker/gate.ts` `sweep`, `remove`, `runOf`; `apis.ts` `allPods`, `ok`).
+- Lane 3. Audited 2026-11-27 13:55 UTC.
+
+**Verdict: PASS, 0 red.** R1 is fixed in the spec and in its acceptance criterion; the five notes are folded in. Four
+new notes, none blocking.
+
+## Round 1 findings
+
+- **R1 fixed.** Unit 1 now says the `ax-ci-` pass runs right after the pod list, before the `"no pod"` return and before
+  the App token, with no GitHub call. AC1's second test (only an old `ax-ci-` pod and `ruken-runner`, every GitHub call
+  failing) cannot pass against today's `sweep` (`gate.ts:301` returns `"no pod"` first; `gate.ts:303` builds the token
+  before any delete), so it fails on a revert as AC1 requires. Checked: `allPods` (`apis.ts`) needs only the RunPod key
+  and returns every pod with `name` and `createdAt`, so the pass has all it needs before the GitHub step.
+- **N1 folded.** The `-2` replacement suffix is in Unit 1 and AC1. Examples' `labelTime` regex
+  (`/^ax-ci-\d+-\d+-([0-9a-z]{8})[0-9a-z]{4,}(-\d)?$/`) and `replacementName` (`${label}-2`) match what the spec describes.
+- **N2 folded.** Unit 2 adds the Examples `this-repo` line, named in the pull request.
+- **N3 folded.** "No leftover pod" is stated as a check at `preflight` moments, not a standing alarm, and the no-age pod
+  case fails it. The `preflight` job already has `RUNPOD_API_KEY` (`gpu.yml`, `preflight` step env), so no workflow change is needed.
+- **N4 folded.** The warning shape (`warning` with `ok: true`, `warning:` summary line, `::warning::`, exit 0) is named; AC3 asserts it.
+- **N5 folded.** Cross-reference comments in both label parsers and an Examples test pinning `makeLabel` against `labelTime`.
+
+## Red
+
+None.
+
+## Notes (not blocking)
+
+- **N2-1. Unit 2's file list is short.** Its heading names `preflight.ts`, `cli/preflight.ts` and `preflight.test.ts`,
+  but its bullets and Unit 1 also change `scripts/gpu/names.ts` (the comment naming the Editors copy), the test that pins
+  the label shape (likely `tests/gpu/names-decide.test.ts`), and `.claude/skills/this-repo/SKILL.md`. A "diff touches
+  only files in the plan" check would flag them. Fix: add the three to the heading. Files: the spec only.
+- **N2-2. "Right after the pod list" leaves the ledger step in front.** In `sweep` the Editors ledger reconcile
+  (`ledger.live()`, `gate.ts:298-299`) sits between `allPods` and the `"no pod"` return; a ledger read that throws would
+  skip the Examples pass. Placing the pass before that loop removes the dependency. AC1's second test could also assert
+  the reply names the deleted pod (Unit 1 says it does; round 1's fix text asked for it). Builder's call.
+- **N2-3. "Read as `podAgeMs`" with one stated difference.** Examples' `podAgeMs` gives Infinity (delete) for an
+  `ax-ci-` pod with neither label time nor `createdAt`; Editors leaves it alone. The spec says so and it is the safer
+  choice for a Worker sweeping another repo's prefix, and `makeLabel` always writes a time, so it does not bite. Wording only.
+- **N2-4. For the implementation audit.** The build at 7c36079 types the field `warning?: boolean`
+  (`scripts/gpu/preflight.ts:12`) where the spec says `warning?: true`. Equivalent in use; check there, not here.
+
+## Not checked
+
+- The build commit 7c36079 and any Editors code: the implementation audit's job.
+- Whether GitHub's `schedule` has started for `gpu.yml` since the 13:48 re-enable: the spec does not depend on it.
