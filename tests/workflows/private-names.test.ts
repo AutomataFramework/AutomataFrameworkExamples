@@ -2,8 +2,7 @@
 // for forks whatever the approval settings, so a fork that saw pass or fail could test guesses against the list.
 // This reads the workflow as text (no YAML parser until slice 1a) and checks the fork condition on every step.
 import { readFileSync } from 'node:fs'
-import { describe, test } from 'node:test'
-import { expect } from '../expect.ts'
+import { describe, expect, test } from 'bun:test'
 
 const text = readFileSync(new URL('../../.github/workflows/private-names.yml', import.meta.url), 'utf8')
 const FORK =

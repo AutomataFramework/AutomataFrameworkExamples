@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
+import { describe, expect, test } from 'bun:test'
 import { judge, plan, queuePr, type Results } from '../../scripts/gpu/decide.ts'
 import { isOurs, labelTime, ledgerVar, makeLabel, podPrefix, replacementName, spentVar } from '../../scripts/gpu/names.ts'
-import { expect } from '../expect.ts'
 
 describe('names', () => {
   const now = Date.parse('2026-11-27T12:00:00Z')

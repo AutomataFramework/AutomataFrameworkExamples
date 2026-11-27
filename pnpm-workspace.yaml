@@ -1,0 +1,3 @@
+# The sample games are packages of their own (from slice 1a). The starter the harness makes at build time is not.
+packages:
+  - games/*

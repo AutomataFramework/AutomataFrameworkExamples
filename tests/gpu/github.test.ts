@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
 import { createPublicKey, createVerify, generateKeyPairSync } from 'node:crypto'
-import { describe, test } from 'node:test'
+import { describe, expect, test } from 'bun:test'
 import { APP_PERMISSIONS, appJwt, installationCaller, makeJit, runnerOnline } from '../../scripts/gpu/github.ts'
-import { expect } from '../expect.ts'
 import { deps, world } from './fakes.ts'
 
 describe('GitHub', () => {

@@ -1,5 +1,4 @@
-import { describe, test } from 'node:test'
-import { expect } from '../expect.ts'
+import { describe, expect, test } from 'bun:test'
 import { findProblems, isContent, NOTICE, NOTICE_WORDS } from '../../scripts/check-content-license.ts'
 
 const notice = (): string => `# Content licence\n\nCopyright (c) 2026 McThayDT. ${NOTICE_WORDS}.\n`

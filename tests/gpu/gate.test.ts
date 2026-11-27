@@ -1,10 +1,9 @@
-import { describe, test } from 'node:test'
+import { describe, expect, test } from 'bun:test'
 import { reserve, priced, spent, entries, fold } from '../../scripts/gpu/budget.ts'
 import { CAP_USD, GPU_ORDER, ONLINE_WAIT_MS, SWEEP_AGE_MIN, WATCH_GRACE_MS } from '../../scripts/gpu/config.ts'
 import { ensureOnline, guard, makePod, podAgeMs, stopRun, sweepAll, watchRun, watchState } from '../../scripts/gpu/gate.ts'
 import { makeLabel, replacementName } from '../../scripts/gpu/names.ts'
 import { render, summaryLines } from '../../scripts/gpu/summary.ts'
-import { expect } from '../expect.ts'
 import { deps } from './fakes.ts'
 
 const MIN = 60_000

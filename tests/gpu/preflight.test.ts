@@ -1,8 +1,7 @@
-import { describe, test } from 'node:test'
+import { describe, expect, test } from 'bun:test'
 import { githubVars } from '../../scripts/gpu/budget.ts'
 import { caller } from '../../scripts/gpu/http.ts'
 import { preflight, type Preflight } from '../../scripts/gpu/preflight.ts'
-import { expect } from '../expect.ts'
 import { deps } from './fakes.ts'
 
 function setup(overrides: Partial<Preflight> = {}) {

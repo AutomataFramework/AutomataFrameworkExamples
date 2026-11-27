@@ -1,8 +1,7 @@
 // The GPU workflows are read as text and held to the rules in `gpu-rules.ts`. Each rule is also shown to fire: the real
 // file is broken once for each rule and the rule must name it ("shown by breaking each once").
 import { readFileSync } from 'node:fs'
-import { describe, test } from 'node:test'
-import { expect } from '../expect.ts'
+import { describe, expect, test } from 'bun:test'
 import { forkGuardProblems, gpuProblems } from './gpu-rules.ts'
 import { ciProblems, pinProblems, retentionProblems } from './workflow-rules.ts'
 

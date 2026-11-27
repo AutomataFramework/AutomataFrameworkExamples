@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["scripts/**/*.ts", "harness/cases/*/*.ts", "tests/**/*.test.ts"],
+  "project": ["scripts/**/*.ts", "harness/**/*.ts", "tests/**/*.ts"],
+  "ignoreBinaries": ["nvidia-smi"],
+  "ignoreDependencies": [
+    "@automataframework/2d",
+    "@automataframework/core",
+    "@automataframework/tools",
+    "create-automata",
+    "vite"
+  ]
+}
