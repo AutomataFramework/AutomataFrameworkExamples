@@ -16,7 +16,20 @@ jobs:
           python3 - <<'PY'
           import json
           s=json.load(open('spec.json'))
-          for p,ops in s['paths'].items():
-              for m,o in ops.items():
-                  if isinstance(o,dict): print(m.upper(),p,'|',o.get('x-runpod-scope'),'|',(o.get('summary') or '')[:70])
+          def res(x,d=0):
+              if isinstance(x,dict):
+                  if '$ref' in x and d<6:
+                      n=x['$ref'].split('/')
+                      t=s
+                      for k in n[1:]: t=t[k]
+                      return res(t,d+1)
+                  return {k:res(v,d) for k,v in x.items() if k not in ('description','example','examples','x-runpod-scope')}
+              if isinstance(x,list): return [res(i,d) for i in x]
+              return x
+          for p,m in [('/v2/pods','get'),('/v2/pods','post'),('/v2/pods/{id}','delete'),('/v2/billing/pods','get'),('/v2/catalog/gpus','get')]:
+              o=s['paths'][p][m]
+              print('#####',m.upper(),p)
+              print(json.dumps(res({'parameters':o.get('parameters'),'body':o.get('requestBody'),'ok':{k:v for k,v in o.get('responses',{}).items() if k.startswith('2')}}),separators=(',',':'))[:6000])
           PY
+          echo '#### live catalog'
+          curl -sS -m 30 -w '\nHTTP %{http_code}\n' -H "Authorization: Bearer $K" "https://api.runpod.io/v2/catalog/gpus" | head -c 2500
