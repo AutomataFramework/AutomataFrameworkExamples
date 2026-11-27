@@ -12,8 +12,11 @@ jobs:
       - env:
           K: ${{ secrets.RUNPOD_API_KEY }}
         run: |
-          echo "== pod shape (env, args, cmd removed)"
-          curl -sS -m 30 -H "Authorization: Bearer $K" https://api.runpod.io/v2/pods | jq '.pods[] | del(.env, .args, .cmd, .entrypoint)'
-          for p in v2/openapi.json v2/openapi.yaml v2/docs v2/swagger.json openapi.json v2/gpu v2/gpu-availability v2/datacenters v2/cpu-flavors v2/billing/pods?grouping=podId; do
-            echo "== GET /$p"; curl -sS -m 30 -w '\nHTTP %{http_code}\n' -H "Authorization: Bearer $K" "https://api.runpod.io/$p" | head -c 1200
-          done
+          curl -sS -m 30 -H "Authorization: Bearer $K" https://api.runpod.io/v2/openapi.json -o spec.json
+          python3 - <<'PY'
+          import json
+          s=json.load(open('spec.json'))
+          for p,ops in s['paths'].items():
+              for m,o in ops.items():
+                  if isinstance(o,dict): print(m.upper(),p,'|',o.get('x-runpod-scope'),'|',(o.get('summary') or '')[:70])
+          PY
