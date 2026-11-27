@@ -12,8 +12,21 @@ description: Use when working in AutomataFrameworkExamples: its layout, its CI, 
 - `scripts/`: dependency-free checks run by Node 24 (it runs TypeScript files as they are):
   `check-commit-authors.ts` (the same file in every repo of the project), `check-content-license.ts` and
   `check-private-names.ts`.
-- `tests/`: their tests, on Node's own test runner (`pnpm test`). `tests/expect.ts` is a tiny stand-in for Vitest's
-  `expect` until slice 1a brings the game stack.
+- `tests/`: their tests, on `bun test` (`pnpm test`, bun 1.4.4 as in Framework), importing from `bun:test`.
+- `harness/`: plays the games in a real browser. `pnpm check:games` and `pnpm build:games` check and build every game
+  (in 1a only the starter a newcomer gets, made fresh by the pinned `create-automata` into `examples/starter/`, which
+  is never committed and needs no install: its packages resolve from the repo's, pinned to the same preview).
+  `pnpm harness` plays every case (`--piece <n>`, `--case <id>`). A case is `{ id, slice, check, kind, run }` in a
+  file under `harness/cases/<slice>/`; `pieces.ts` says which pod runs it, and a test fails on a case in no piece or
+  two. `profiles.ts` holds the phone, tablet and computer; `ready.ts` opens a built game and waits on
+  `window.__automata.ready`. On a pod it uses the image's own playwright-core and the GPU flags the smoke step uses;
+  elsewhere set `AUTOMATA_CHROMIUM` to a Chromium (in a cloud session, `/opt/pw-browsers/chromium-*/chrome-linux64/chrome`).
+- `harness/newcomer.ts` (`pnpm newcomer`, criterion 20): in a temp folder, `npm create automata@preview`, install,
+  check, build, `npm run link`, then plays the link to the win on the phone profile. Until the test repo exists (card
+  O7) the link goes to a stand-in for GitHub made in the script, and it says criterion 20 is not met.
+- Other checks, not yet in CI (`ci.yml` is lane 3): `pnpm lint` (oxlint 1.95.0) and `pnpm knip` (knip 6.48.0).
+  `knip.json` ignores the four packages and `vite` that only the starter uses. Both still flag one older file each
+  (`tests/workflows/gpu-rules.ts` line 32, `tests/gpu/fakes.ts`), left as found.
 - `docs/superpowers/`: `progress.md`, `history.md`, `roadmap.md` (a pointer: the one roadmap is in the project's files),
   `live/` and, later, `specs/` and `audits/`.
 
@@ -28,6 +41,9 @@ description: Use when working in AutomataFrameworkExamples: its layout, its CI, 
 
 - `ci.yml` on GitHub's runners: `checks` (the tests and the content-licence check), `commit-authors`, and `gate`,
   the aggregate that `main` requires.
+- `games` (in `ci.yml`) and `build-games` plus the harness steps of `gpu-smoke` (in `gpu.yml`) turn on by themselves
+  because `harness/run.ts` exists: `games` runs `pnpm check:games` then `pnpm test`; `build-games` uploads
+  `examples/*/dist` and `games/*/dist`, and the pod downloads that same run's folders and runs `pnpm harness`.
 - `private-names.yml`: `private-names`, also required. The script always comes from the base commit (`main` for a
   pull request, on `pull_request_target`; the queue's base in a merge-queue run), run against the change's files
   checked out as data. In a merge-queue run GitHub takes the workflow file itself from the queue's merge commit, so an
