@@ -35,8 +35,9 @@ key, no new cost. This changes one line of both designs: Examples' "Editors uses
 ### Unit 1, Editors (`tools/ci/gate-worker/gate.ts`, its test, `this-repo`)
 
 - `sweep` also lists pods whose name starts `ax-ci-`. One older than **50 minutes** (Examples' `SWEEP_AGE_MIN`) is
-  deleted with `DELETE /v2/pods/<id>`. Its age is the older of RunPod's `createdAt` and the time in its label
-  (`ax-ci-<run>-<attempt>-<8 base-36 time chars><random>`); a pod with neither is left alone.
+  deleted with `DELETE /v2/pods/<id>`. Its age is read as Examples' own sweep reads it (`podAgeMs`): the time in its
+  label (`ax-ci-<run>-<attempt>-<8 base-36 time chars><random>`), else RunPod's `createdAt`; a pod with neither is left
+  alone (Examples' own sweep deletes it).
 - It never touches the Editors ledger for an `ax-ci-` pod (Editors' `remove` books `stopped` in its own ledger, so these
   go through a plain delete). Examples' ledger closes the entry at its next `pod-start`, which already closes entries for
   pods found gone.
@@ -62,7 +63,7 @@ key, no new cost. This changes one line of both designs: Examples' "Editors uses
 ## Acceptance criteria
 
 1. Editors: a unit test with a stand-in pod list shows the sweep deletes an `ax-ci-` pod 51 minutes old (by
-   `createdAt`, and by label time when `createdAt` is missing), keeps one 49 minutes old, keeps `ruken-runner`, and
+   label time, and by `createdAt` when the name has no time), keeps one 49 minutes old, keeps `ruken-runner`, and
    leaves the Editors ledger unchanged. Reverting the change fails it.
 2. Editors: `bun test`, `bun check`, `pnpm lint && pnpm fmt:check` pass; CI on the gate is green.
 3. Examples: a unit test shows "No leftover pod" fails naming a 61-minute `ax-ci-` pod and passes with a 59-minute one
