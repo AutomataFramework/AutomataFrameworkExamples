@@ -22,6 +22,8 @@ export function isOurs(name: string): boolean {
 }
 
 /** The time a label was made, or null for a name that is not one of ours or has no time. */
+// The Editors gate's sweep parses this format too (AutomataFrameworkEditors tools/ci/gate-worker/gate.ts,
+// `examplesAgeMs`): keep the two in step.
 export function labelTime(name: string): number | null {
   const m = /^ax-ci-\d+-\d+-([0-9a-z]{8})[0-9a-z]{4,}(-\d)?$/.exec(name)
   if (!m) return null
