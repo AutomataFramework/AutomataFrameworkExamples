@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "id": "move-by-touch",
+  "name": "Move by touch",
+  "size": [320, 180],
+  "languages": ["en"],
+  "start": "play",
+  "content": [{ "id": "controls", "kind": "controls", "path": "controls.json" }],
+  "assets": []
+}

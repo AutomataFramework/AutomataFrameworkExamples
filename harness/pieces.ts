@@ -1,6 +1,14 @@
 // Which pod runs which case. One pod a run for now; when a measured run passes the job's time limit, the cases are
 // split here across up to 3 pods (the pod limit). A test checks every case sits in exactly one piece.
-export const pieces: string[][] = [['1a/starter-wins-on-phone']]
+export const pieces: string[][] = [
+  [
+    '1a/starter-wins-on-phone',
+    '1a/open-a-window',
+    '1a/draw-shapes',
+    '1a/move-by-touch',
+    '1a/move-by-gamepad',
+  ],
+]
 
 /** The ids in piece `n` (counted from 1), or why there is no such piece. */
 export function piece(n: number): string[] {

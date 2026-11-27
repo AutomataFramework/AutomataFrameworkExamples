@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "id": "move-by-gamepad",
+  "name": "Move by gamepad",
+  "size": [320, 180],
+  "languages": ["en"],
+  "start": "play",
+  "content": [{ "id": "controls", "kind": "controls", "path": "controls.json" }],
+  "assets": []
+}

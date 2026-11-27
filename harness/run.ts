@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 import { type Case, loadCases } from './cases.ts'
+import { smallExamples, writePage } from './examples.ts'
 import { piece, pieceProblems } from './pieces.ts'
 import { address, launch, openGame, renderer, serve } from './ready.ts'
 
@@ -33,8 +34,16 @@ function makeStarter(): string {
   return folder
 }
 
-/** Every game the harness checks and builds. Later slices add the samples and the small examples here. */
+/** Every game the harness checks and builds. Later slices add the samples here. */
 const games = (): string[] => [makeStarter()]
+
+/** Builds each small example (`examples/<group>/<name>/`) into `examples/<group>-<name>/dist`. */
+function buildSmallExamples(): void {
+  for (const example of smallExamples()) {
+    writePage(example)
+    sh(example.source, 'vite', 'build', '--base', './', '--outDir', join(example.built, 'dist'), '--emptyOutDir')
+  }
+}
 
 async function play(selected: Case[]): Promise<boolean> {
   const browser = selected.some((c) => c.kind === 'page') ? await launch() : null
@@ -80,6 +89,7 @@ async function main(args: string[]): Promise<number> {
   }
   if (command === 'build') {
     for (const game of games()) sh(game, 'vite', 'build')
+    buildSmallExamples()
     return 0
   }
   const all = await loadCases()
