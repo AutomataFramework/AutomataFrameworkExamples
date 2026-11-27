@@ -10,9 +10,20 @@ export function jobsOf(text: string): Map<string, string> {
   return out
 }
 
+import { SMOKE_TIMEOUT_MIN } from '../../scripts/gpu/config.ts'
 import { envProblems } from '../../scripts/gpu/smoke/checks.ts'
 
 const POD_JOBS = ['pod-start', 'gpu-smoke', 'watch', 'pod-stop']
+/** The jobs `gpu-smoke` may wait for: the two that make its pod, and the one that builds what it opens (no other). */
+const SMOKE_MAY_NEED = ['plan', 'pod-start', 'build-games']
+
+/** The job names a job lists under `needs`, written as `[a, b]`, as `a`, or as a block list. */
+export function needsOf(job: string): string[] {
+  const flow = /^ {4}needs:[ \t]*(.+)$/m.exec(job)
+  if (flow) return flow[1].replace(/[\[\]]/g, '').split(',').map((x) => x.trim()).filter(Boolean)
+  const block = /^ {4}needs:[ \t]*\n((?: {6}- .+\n)+)/m.exec(job)
+  return block ? [...block[1].matchAll(/^ {6}- (.+)$/gm)].map((m) => m[1].trim()) : []
+}
 const TRUSTED_REF = 'ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}'
 
 export function gpuProblems(text: string): string[] {
@@ -26,11 +37,14 @@ export function gpuProblems(text: string): string[] {
   // No workflow-level env.
   if (/^env:/m.test(text)) p.push('a workflow-level `env`')
   // Every job has a timeout, and it is the number the spec names.
-  const timeouts: Record<string, number> = { plan: 5, 'pod-start': 12, 'gpu-smoke': 15, watch: 20, 'pod-stop': 5, gpu: 5, sweep: 5, ledger: 5, preflight: 5 }
+  // `gpu-smoke` may take any limit up to the settings' most; the others keep their exact number.
+  const timeouts: Record<string, number> = { plan: 5, 'pod-start': 12, watch: 20, 'pod-stop': 5, gpu: 5, sweep: 5, ledger: 5, preflight: 5 }
   for (const [id, body] of jobs) {
     const m = /timeout-minutes: (\d+)/.exec(body)
     if (!m) p.push(`job ${id} has no timeout-minutes`)
-    else if (timeouts[id] !== undefined && Number(m[1]) !== timeouts[id]) p.push(`job ${id} has timeout-minutes ${m[1]}, not ${timeouts[id]}`)
+    else if (id === 'gpu-smoke') {
+      if (Number(m[1]) > SMOKE_TIMEOUT_MIN) p.push(`job gpu-smoke has timeout-minutes ${m[1]}, more than the ${SMOKE_TIMEOUT_MIN} the settings allow`)
+    } else if (timeouts[id] !== undefined && Number(m[1]) !== timeouts[id]) p.push(`job ${id} has timeout-minutes ${m[1]}, not ${timeouts[id]}`)
   }
   // gpu-smoke: no secret, no variable, no secret-carrying output, empty permissions.
   const smoke = need('gpu-smoke')
@@ -40,6 +54,16 @@ export function gpuProblems(text: string): string[] {
     if (!['needs.plan.outputs.apply', 'needs.plan.outputs.fork', 'needs.pod-start.outputs.label'].includes(m[0])) p.push(`gpu-smoke reads ${m[0]}`)
   }
   if (!/permissions: \{\}/.test(smoke)) p.push('gpu-smoke has permissions other than `{}`')
+  // It may wait for the build job and open what that built, from this run: no run id, no token, no other repository.
+  for (const n of needsOf(smoke)) if (!SMOKE_MAY_NEED.includes(n)) p.push(`gpu-smoke needs ${n}, which a pod's job may not wait for`)
+  for (const d of smoke.matchAll(/uses: actions\/download-artifact@[^\n]*\n((?: {8,}.+\n)*)/g)) {
+    for (const k of ['run-id', 'github-token', 'repository']) {
+      if (new RegExp(`^ {10}${k}:`, 'm').test(d[1])) p.push(`gpu-smoke downloads an artifact with ${k}, so it is not this run's own`)
+    }
+  }
+  // The build job runs on GitHub's runners, never a pod, and holds no secret or variable.
+  const build = need('build-games')
+  if (build && /runs-on:.*self-hosted/.test(build)) p.push('build-games does not run on a GitHub runner')
   if (!smoke.includes("runs-on: [self-hosted, '${{ needs.pod-start.outputs.label }}']")) p.push('gpu-smoke does not ask for its own pod label')
   // pod-start gives out the pod id and the label only.
   const outputs = /\n {4}outputs:\n((?: {6}.+\n)+)/.exec(need('pod-start'))?.[1] ?? ''
@@ -58,14 +82,14 @@ export function gpuProblems(text: string): string[] {
     if (/pull_request\.head/.test(need(id))) p.push(`${id} reads the pull request's head`)
   }
   // Secrets stay in the jobs that start, stop and count pods.
-  for (const id of ['plan', 'watch', 'gpu-smoke', 'gpu']) {
+  for (const id of ['plan', 'watch', 'gpu-smoke', 'gpu', 'build-games']) {
     if (/secrets\.(?!GITHUB_TOKEN)/.test(need(id)) || /vars\./.test(need(id))) p.push(`${id} reads a secret or a variable`)
   }
   // watch has the one permission and no other secret.
   if (!/permissions:\n {6}actions: write\n(?! {6})/.test(need('watch'))) p.push('watch has permissions other than `actions: write`')
-  // An upload keeps for 3 days.
+  // An upload keeps for 1 to 3 days (the build job's keeps 1).
   for (const u of text.matchAll(/uses: actions\/upload-artifact@[^\n]*\n((?: {8,}.+\n)*)/g)) {
-    if (!/retention-days: 3\n/.test(u[1])) p.push('an upload without `retention-days: 3`')
+    if (!/retention-days: [123]\n/.test(u[1])) p.push('an upload without `retention-days: 3` (the build job may keep 1)')
   }
   // The aggregate: always, every job's result, and the script that fails a cancelled job.
   const gpu = need('gpu')
