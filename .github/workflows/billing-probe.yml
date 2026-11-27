@@ -13,7 +13,11 @@ jobs:
           K: ${{ secrets.RUNPOD_API_KEY }}
         run: |
           [ -n "$K" ] || { echo "RUNPOD_API_KEY is not set on this repo"; exit 1; }
+          getent hosts rest.runpod.io api.runpod.io || true
           for u in "pods" "billing/pods" "billing/pods?grouping=podId&bucketSize=month" "billing/pods?bucketSize=day"; do
             echo "== GET /v1/$u"
-            curl -s -m 30 -w '\nHTTP %{http_code}\n' -H "Authorization: Bearer $K" "https://rest.runpod.io/v1/$u" | head -c 3000
+            curl -sS -m 30 -w '\nHTTP %{http_code}\n' -H "Authorization: Bearer $K" "https://rest.runpod.io/v1/$u" | head -c 3000
           done
+          echo "== GraphQL myself"
+          curl -sS -m 30 -w '\nHTTP %{http_code}\n' -X POST -H "Authorization: Bearer $K" -H 'content-type: application/json' \
+            -d '{"query":"query { myself { pods { id name costPerHr } } }"}' "https://api.runpod.io/graphql" | head -c 2000
