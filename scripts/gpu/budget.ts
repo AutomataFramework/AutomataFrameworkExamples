@@ -85,7 +85,7 @@ export async function reconcile(vars: Vars, livePodNames: Set<string>, nowMs: nu
   const closed: string[] = []
   for (const e of await entries(vars)) {
     if (e.end !== undefined || keep.includes(e.label) || livePodNames.has(e.label)) continue
-    if (e.podId === undefined && nowMs - e.start < 120_000) continue
+    if (nowMs - e.start < 120_000) continue // another run may have just made or priced it
     await close(vars, e.label, nowMs)
     closed.push(e.label)
   }

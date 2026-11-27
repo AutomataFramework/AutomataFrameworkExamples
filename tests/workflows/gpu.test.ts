@@ -24,7 +24,7 @@ describe('gpu.yml', () => {
     ['a workflow-level env', '\nconcurrency:', '\nenv:\n  A: b\n\nconcurrency:', 'workflow-level `env`'],
     ['`edited` in the triggers', 'ready_for_review]', 'ready_for_review, edited]', '`edited`'],
     ['a secret in gpu-smoke', '    permissions: {}\n    steps:\n      - uses: actions/checkout', '    permissions: {}\n    env:\n      K: ${{ secrets.RUNPOD_API_KEY }}\n    steps:\n      - uses: actions/checkout', 'gpu-smoke names `secrets.`'],
-    ['a variable in gpu-smoke', '          AX_SMOKE_OUT:', '          X: ${{ vars.EXAMPLES_CI_APP_ID }}\n          AX_SMOKE_OUT:', 'gpu-smoke names `vars.`'],
+    ['a variable in gpu-smoke', '        run: node scripts/gpu/smoke/render.ts "$RUNNER_TEMP/gpu-smoke.webp"\n', '        run: node scripts/gpu/smoke/render.ts "$RUNNER_TEMP/gpu-smoke.webp"\n        env:\n          X: ${{ vars.EXAMPLES_CI_APP_ID }}\n', 'gpu-smoke names `vars.`'],
     ['a second pod-start output', '      label: ${{ steps.label.outputs.label }}\n', '      label: ${{ steps.label.outputs.label }}\n      jit: ${{ steps.jit.outputs.jit }}\n', 'not just pod and label'],
     ['a pod job with no fork refusal', "    if: needs.plan.outputs.apply == 'true' && needs.plan.outputs.fork != 'true' && github.event_name != 'workflow_dispatch'\n    runs-on: [self-hosted", "    if: needs.plan.outputs.apply == 'true'\n    runs-on: [self-hosted", 'gpu-smoke has no fork refusal'],
     ['pod-stop running the change', '        run: node scripts/gpu/cli/stop.ts', '        run: pnpm test', 'pod-stop runs pnpm test'],
@@ -40,6 +40,7 @@ describe('gpu.yml', () => {
     ['an image not pinned by digest', /ci-gpu@sha256:0{64}/, 'ci-gpu:latest', 'does not pin the image by digest'],
     ['a ledger that can be cancelled', 'cancel-in-progress: false\n    permissions', 'cancel-in-progress: true\n    permissions', 'never cancelled'],
     ['cancel-in-progress for main', "cancel-in-progress: ${{ github.event_name == 'pull_request' }}", 'cancel-in-progress: true', 'cancel-in-progress is not limited'],
+    ['an environment name the smoke refuses', '        run: node scripts/gpu/smoke/render.ts "$RUNNER_TEMP/gpu-smoke.webp"\n', '        run: node scripts/gpu/smoke/render.ts\n        env:\n          AX_SMOKE_OUT: x\n', 'gpu-smoke sets AX_SMOKE_OUT'],
     ['gpu-smoke asking for plain self-hosted', "runs-on: [self-hosted, '${{ needs.pod-start.outputs.label }}']", 'runs-on: self-hosted', 'own pod label'],
   ]
   for (const [name, from, to, expected] of breaks) {
@@ -64,8 +65,10 @@ describe('fork-guard.yml', () => {
     ['a checkout', '    steps:\n', '    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n', 'checks out something'],
     ['another permission', '      pull-requests: write\n', '      pull-requests: write\n      contents: write\n', 'not only pull-requests: write'],
     ['no draft step', 'gh pr ready --undo', 'echo', 'draft'],
-    ['no failing exit', 'exit 1', 'exit 0', 'does not fail a fork'],
+    ['no failing exit', /exit 1/g, 'exit 0', 'does not fail a fork'],
     ['no merge queue run', 'merge_group:', 'workflow_dispatch:', 'merge queue'],
+    ['a hidden failed draft', 'if ! gh pr ready --undo "$PR" --repo "$REPO"; then', 'gh pr ready --undo "$PR" --repo "$REPO" || true; if false; then', '|| true'],
+    ['no draft check afterwards', /--json isDraft/g, '--json state', 'check the pull request is a draft'],
     ['text a fork controls in a script', 'PR: ${{ github.event.pull_request.number }}', 'PR: ${{ github.event.pull_request.title }}', 'text a fork controls'],
   ]
   for (const [name, from, to, expected] of breaks) {

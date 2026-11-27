@@ -128,9 +128,7 @@ jobs:
           cat /opt/ax/key-scope.txt
           echo "Runner version: $(cat /opt/actions-runner/.runner-version 2>/dev/null || /opt/actions-runner/bin/Runner.Listener --version)"
       - name: Draw with WebGL on the GPU
-        run: node scripts/gpu/smoke/render.ts
-        env:
-          AX_SMOKE_OUT: ${{ runner.temp }}/gpu-smoke.webp
+        run: node scripts/gpu/smoke/render.ts "$RUNNER_TEMP/gpu-smoke.webp"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gpu-smoke-picture

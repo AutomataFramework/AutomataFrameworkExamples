@@ -39,7 +39,16 @@ jobs:
         run: |
           set -euo pipefail
           # A draft cannot be added to the merge queue. Marking it ready again runs this again.
-          gh pr ready --undo "$PR" --repo "$REPO" || true
+          if [ "$(gh pr view "$PR" --repo "$REPO" --json isDraft --jq .isDraft)" != true ]; then
+            if ! gh pr ready --undo "$PR" --repo "$REPO"; then
+              echo "::error::fork-guard could not turn this pull request into a draft"
+              exit 1
+            fi
+          fi
+          if [ "$(gh pr view "$PR" --repo "$REPO" --json isDraft --jq .isDraft)" != true ]; then
+            echo "::error::fork-guard could not turn this pull request into a draft"
+            exit 1
+          fi
           marker='<!-- fork-guard -->'
           if ! gh pr view "$PR" --repo "$REPO" --json comments --jq '.comments[].body' | grep -qF "$marker"; then
             gh pr comment "$PR" --repo "$REPO" --body "$marker

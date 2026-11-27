@@ -66,6 +66,13 @@ describe('the ledger', () => {
     const closed = await reconcile(vars, new Set([label(2)]), T0 + 5 * MIN, [label(3)])
     expect(closed).toEqual([label(1)])
   })
+  test('an entry made or priced in the last 2 minutes is left alone, even when its pod is not listed yet', async () => {
+    const vars = memoryVars()
+    await reserve(vars, label(1), T0)
+    await priced(vars, label(1), 'p1', 1)
+    expect(await reconcile(vars, new Set(), T0 + MIN, [])).toEqual([])
+    expect(await reconcile(vars, new Set(), T0 + 3 * MIN, [])).toEqual([label(1)])
+  })
   test('two writers closing at once lose no cost', async () => {
     const vars = memoryVars()
     for (const n of [1, 2]) {

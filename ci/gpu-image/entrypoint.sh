@@ -23,9 +23,18 @@ for v in $(compgen -e | grep -E '^RUNPOD_'); do unset "$v"; done
 
 self_delete() {
   log "deleting this pod ($1)"
-  local code
-  code="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE -H "Authorization: Bearer $(cat "$SECRET/key")" "https://api.runpod.io/v2/pods/$POD_ID")"
-  log "delete answered $code"
+  local code tries=0
+  while [ "$tries" -lt 20 ]; do
+    code="$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X DELETE -H "Authorization: Bearer $(cat "$SECRET/key")" "https://api.runpod.io/v2/pods/$POD_ID")"
+    log "delete answered $code"
+    case "$code" in 2??|404) break ;; esac
+    # Fall back to the GraphQL call the same key can make.
+    code="$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $(cat "$SECRET/key")" -H 'Content-Type: application/json' \
+      -d "{\"query\":\"mutation { podTerminate(input: {podId: \\\"$POD_ID\\\"}) }\"}" 'https://api.runpod.io/graphql')"
+    log "graphql terminate answered $code"
+    case "$code" in 2??) break ;; esac
+    tries=$((tries + 1)); sleep 15
+  done
   # RunPod restarts a container whose PID 1 exits, so wait here for the pod to be removed.
   exec sleep infinity
 }
@@ -41,6 +50,8 @@ self_delete() {
 chmod 0644 /opt/ax/key-scope.txt
 unset key
 
+# (`--disableupdate` is a config.sh option; a JIT runner is not configured with it and run.sh does not take it, so a runner
+#  that wants to update is stopped by the pod itself: the image pins the runner version and is rebuilt monthly.)
 # 2. One runner, one job, as the non-root user, from an environment built from a list.
 rm -f /run/ax/job-started
 cd /opt/actions-runner || self_delete "no runner"

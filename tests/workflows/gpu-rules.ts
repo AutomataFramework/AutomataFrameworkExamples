@@ -10,6 +10,8 @@ export function jobsOf(text: string): Map<string, string> {
   return out
 }
 
+import { envProblems } from '../../scripts/gpu/smoke/checks.ts'
+
 const POD_JOBS = ['pod-start', 'gpu-smoke', 'watch', 'pod-stop']
 const TRUSTED_REF = 'ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}'
 
@@ -75,6 +77,10 @@ export function gpuProblems(text: string): string[] {
   // pod-stop always runs, the ledger is one at a time and never cancelled.
   if (!/if: always\(\) &&/.test(need('pod-stop'))) p.push('pod-stop does not always run')
   if (!/group: ax-ci-ledger\n\s+cancel-in-progress: false/.test(need('ledger'))) p.push('the ledger job is not one at a time and never cancelled')
+  // gpu-smoke's environment: every name it sets must pass the allowlist its own script enforces (the audit's R1).
+  for (const m of smoke.matchAll(/^ {10}([A-Z][A-Z0-9_]*):/gm)) {
+    if (envProblems([m[1]]).length) p.push(`gpu-smoke sets ${m[1]}, which its own environment check refuses`)
+  }
   // The image is pinned by digest.
   if (!/ci-gpu@sha256:[0-9a-f]{64}/.test(need('pod-start'))) p.push('pod-start does not pin the image by digest')
   // Every action is pinned to a commit.
@@ -97,6 +103,8 @@ export function forkGuardProblems(text: string): string[] {
   if (perms.join('|') !== 'pull-requests: write') p.push(`fork-guard has permissions ${perms.join(', ') || 'none'}, not only pull-requests: write`)
   if (!text.includes('gh pr ready --undo')) p.push('fork-guard does not turn a fork into a draft')
   if (!/exit 1/.test(text)) p.push('fork-guard does not fail a fork')
+  if (/\|\| true/.test(text)) p.push('fork-guard hides a failed draft with `|| true`')
+  if (!/--json isDraft/.test(text)) p.push('fork-guard does not check the pull request is a draft afterwards')
   if (/\$\{\{ github\.event\.pull_request\.(title|body|head\.ref)/.test(text)) p.push('fork-guard puts text a fork controls in a script')
   if (!/timeout-minutes: 5/.test(text)) p.push('fork-guard has no timeout')
   return p

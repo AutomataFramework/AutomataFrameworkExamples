@@ -1,9 +1,15 @@
 // Opens a page in real Chromium, draws a shader with WebGL2, fails unless a real NVIDIA GPU did it, and keeps the
-// picture as a WebP. `AX_SMOKE_NO_VULKAN=1` drops the flags to show that the check fails on a software renderer.
+// picture as a WebP. `--no-vulkan` drops the flags to show that the check fails on a software renderer.
 import { spawnSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { envProblems, rendererProblem, VULKAN_ARGS } from './checks.ts'
+
+// The picture's path is an argument, never an environment name: the job's environment holds only allowlisted names.
+// `--no-vulkan` drops the flags to show that the check fails on a software renderer.
+const args0 = process.argv.slice(2)
+const noVulkan = args0.includes('--no-vulkan')
+const out = args0.find((a) => !a.startsWith('--')) ?? 'gpu-smoke.webp'
 
 const smi = spawnSync('nvidia-smi', ['-L'], { encoding: 'utf8' })
 console.log(smi.stdout || smi.stderr)
@@ -17,7 +23,7 @@ console.log('The environment holds only allowlisted names.')
 
 // playwright-core is installed in the image, outside the change, so a change cannot swap it.
 const { chromium } = createRequire('/usr/local/lib/node_modules/')('playwright-core')
-const args = process.env.AX_SMOKE_NO_VULKAN === '1' ? ['--no-sandbox'] : VULKAN_ARGS
+const args = noVulkan ? ['--no-sandbox'] : VULKAN_ARGS
 const browser = await chromium.launch({ args })
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } })
 await page.setContent('<canvas id="c" width="640" height="360"></canvas><canvas id="o" width="640" height="360"></canvas>')
@@ -56,9 +62,9 @@ const result = await page.evaluate(() => {
   return { webgl2: true, renderer, webp: o.toDataURL('image/webp', 0.9) }
 })
 await browser.close()
-console.log(`Chromium ${process.env.AX_SMOKE_NO_VULKAN === '1' ? 'without' : 'with'} the Vulkan flags; WebGL2 renderer: ${result.renderer}`)
+console.log(`Chromium ${noVulkan ? 'without' : 'with'} the Vulkan flags; WebGL2 renderer: ${result.renderer}`)
 const problem = rendererProblem(result.webgl2, result.renderer)
 if (problem) throw new Error(problem)
 if (!result.webp.startsWith('data:image/webp;base64,')) throw new Error('the picture is not a WebP')
-writeFileSync(process.env.AX_SMOKE_OUT ?? 'gpu-smoke.webp', Buffer.from(result.webp.split(',')[1], 'base64'))
+writeFileSync(out, Buffer.from(result.webp.split(',')[1], 'base64'))
 console.log('Picture written.')
