@@ -47,7 +47,7 @@ description: Use when working in AutomataFrameworkExamples: its layout, its CI, 
 - GPU work (`.github/workflows/gpu.yml`, `fork-guard.yml`, `scripts/gpu/`, `ci/gpu-image/`): RunPod pods named `ax-ci-*`,
   started by jobs on GitHub's runners with scripts from the trusted base (never from the change), for same-repo pull
   requests, the merge queue and `main` only. Only `gpu-smoke` runs on the pod, with no secret. The Editors repo's pods
-  are `ae-ci-*`, and the owner has an unrelated `ruken-runner` pod: never touch any pod without our `ax-ci-` prefix.
+  are `ae-ci-*`, and the owner has an unrelated `ruken-runner` pod: never touch any pod without our `ax-ci-` prefix. The Editors gate's 10-minute cron also deletes `ax-ci-` pods older than 50 minutes, because GitHub's timer never starts this repo's scheduled sweep (owner, 2026-11-27).
 - Examples has its own GitHub App: variable `EXAMPLES_CI_APP_ID`, secret `EXAMPLES_CI_APP_KEY` (administration and
   variables write, installed on this repo only). Not shared with Editors.
 - Spend: the RunPod key cannot read billing, so a ledger of one variable per pod (`AX_CI_LEDGER_*`) folded into a

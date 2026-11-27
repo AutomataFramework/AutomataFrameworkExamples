@@ -104,4 +104,11 @@ describe('the gpu aggregate', () => {
   test('a plan that did not succeed fails it', () => {
     expect(judge(applies, { ...ok, plan: 'failure' }).pass).toBe(false)
   })
+  test('the label shape the Editors gate also parses: ax-ci-<run>-<attempt>-<8 base-36 time><random>, and -2 for a replacement', () => {
+    const t = Date.parse('2026-11-27T14:00:00Z')
+    const label = makeLabel('46010671607', '1', t, 'ab12cd')
+    expect(/^ax-ci-\d+-\d+-([0-9a-z]{8})[0-9a-z]{4,}(-\d)?$/.test(label)).toBe(true)
+    expect(labelTime(label)).toBe(t)
+    expect(labelTime(replacementName(label))).toBe(t)
+  })
 })
