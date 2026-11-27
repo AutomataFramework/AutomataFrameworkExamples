@@ -37,6 +37,9 @@ describe('GitHub', () => {
     const { d, w } = deps()
     const r = await makeJit(d.gh, d.repo, 'ax-ci-1-1-aaaaaaaabbbb', 'ax-ci-1-1-aaaaaaaabbbb')
     expect(r.jit).toBe('jit-for-ax-ci-1-1-aaaaaaaabbbb')
+    // GitHub measured 2026-11-27: a runner config carries only the labels it is asked for, so `self-hosted` must be asked for
+    // or a job with `runs-on: [self-hosted, <label>]` is never given to it.
+    expect(w.jitLabels[0]).toEqual(['self-hosted', 'ax-ci-1-1-aaaaaaaabbbb'])
     w.extraLabels = ['gpu']
     await assert.rejects(makeJit(d.gh, d.repo, 'n2', 'l2'), /labels it was not asked for: gpu/)
     expect(w.runners.some((x) => x.name === 'n2')).toBe(false)

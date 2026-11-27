@@ -25,6 +25,7 @@ export function world(start = Date.parse('2026-11-27T12:00:00Z')) {
     autoOnline: true,
     /** Extra labels GitHub puts on a new runner. */
     extraLabels: [] as string[],
+    jitLabels: [] as string[][],
     cancelled: [] as string[],
     requests: [] as string[],
     created: [] as { gpu: string; name: string; body: any }[],
@@ -67,7 +68,8 @@ export function world(start = Date.parse('2026-11-27T12:00:00Z')) {
       if (method === 'GET' && rest === '/installation') return json(200, { id: 7 })
       if (method === 'GET' && rest === '/actions/runners') return json(200, { runners: w.runners })
       if (method === 'POST' && rest === '/actions/runners/generate-jitconfig') {
-        const r: FakeRunner = { id: 5000 + ++w.n, name: body.name, status: 'offline', labels: [...body.labels, 'self-hosted', ...w.extraLabels].map((name: string) => ({ name })) }
+        w.jitLabels.push([...body.labels])
+        const r: FakeRunner = { id: 5000 + ++w.n, name: body.name, status: 'offline', labels: [...body.labels, ...w.extraLabels].map((name: string) => ({ name })) }
         w.runners.push(r)
         return json(201, { runner: r, encoded_jit_config: `jit-for-${body.name}` })
       }
