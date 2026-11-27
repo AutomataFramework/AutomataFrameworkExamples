@@ -1,5 +1,4 @@
-import { describe, test } from 'node:test'
-import { expect } from '../expect.ts'
+import { describe, expect, test } from 'bun:test'
 import { explain, namesIn, parseNames, scan, selfTest, squash } from '../../scripts/check-private-names.ts'
 
 // Made-up names, so this public test never holds a real one.

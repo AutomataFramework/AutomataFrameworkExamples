@@ -1,6 +1,5 @@
-import { describe, test } from 'node:test'
+import { describe, expect, test } from 'bun:test'
 import { envProblems, rendererProblem, VULKAN_ARGS } from '../../scripts/gpu/smoke/checks.ts'
-import { expect } from '../expect.ts'
 
 describe('gpu-smoke judges', () => {
   test('the names the pod showed in the measured run pass, with GitHub step names', () => {

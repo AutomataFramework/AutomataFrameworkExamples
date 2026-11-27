@@ -4,8 +4,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, test } from 'node:test'
-import { expect } from '../expect.ts'
+import { describe, expect, test } from 'bun:test'
 
 const HOOK = new URL('../../ci/gpu-image/job-started.sh', import.meta.url).pathname
 const REPO = 'AutomataFramework/AutomataFrameworkExamples'

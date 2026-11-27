@@ -1,7 +1,6 @@
 // Each behaviour setting is pinned: the test fails when the value is put back to anything else (the spec's rule).
-import { describe, test } from 'node:test'
+import { describe, expect, test } from 'bun:test'
 import * as c from '../../scripts/gpu/config.ts'
-import { expect } from '../expect.ts'
 
 describe('the gate settings', () => {
   test('the GPU order, cheapest first, NVIDIA only', () => {

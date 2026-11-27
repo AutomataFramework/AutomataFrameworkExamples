@@ -1,8 +1,7 @@
-import { describe, test } from 'node:test'
+import { describe, expect, test } from 'bun:test'
 import { cancel, close, costOf, entries, fold, priced, reconcile, reserve, spent, verdict } from '../../scripts/gpu/budget.ts'
 import { CAP_USD, MAX_RUNNING, SWEEP_AGE_MIN } from '../../scripts/gpu/config.ts'
 import { ledgerVar, makeLabel, spentVar } from '../../scripts/gpu/names.ts'
-import { expect } from '../expect.ts'
 import { memoryVars } from './fakes.ts'
 
 const T0 = Date.parse('2026-11-27T12:00:00Z')

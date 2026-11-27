@@ -2,8 +2,7 @@
 // run up to 30 minutes. U2-1 had them accept both shapes; the old one is no longer allowed. Each rule is shown not to
 // open a hole by breaking the real file.
 import { readFileSync } from 'node:fs'
-import { describe, test } from 'node:test'
-import { expect } from '../expect.ts'
+import { describe, expect, test } from 'bun:test'
 import { gpuProblems } from '../workflows/gpu-rules.ts'
 
 const file = readFileSync(new URL('../../.github/workflows/gpu.yml', import.meta.url), 'utf8')
